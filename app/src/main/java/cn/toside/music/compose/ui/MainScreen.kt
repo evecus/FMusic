@@ -63,8 +63,8 @@ private val tabs = listOf(
     NavTab("setting", "设置"),
 )
 
-/** 搜索页与播放页为独立全屏页面，不显示顶部导航与迷你播放条 */
-private val chromelessRoutes = setOf("search", "play")
+/** 播放页为独立全屏页面，不显示顶部导航与迷你播放条 */
+private val chromelessRoutes = setOf("play")
 
 @Composable
 fun MainScreen(modifier: Modifier = Modifier) {
@@ -134,7 +134,7 @@ private fun MainScaffold(
     var addToListTarget by remember { mutableStateOf<MusicInfo?>(null) }
     val myListsState by myListViewModel.uiState.collectAsState()
 
-    // 搜索 / 播放为独立全屏页面：不显示顶部导航与迷你播放条
+    // 播放页为独立全屏页面：不显示顶部导航与迷你播放条
     val showChrome = currentRoute !in chromelessRoutes
     val selectedTabIndex = tabs.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
 
