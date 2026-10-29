@@ -40,12 +40,16 @@ android {
         }
     }
 
-    // 按 ABI 拆分 APK（本地可编译多架构；CI 只编 arm64）
+    // 按 ABI 拆分 APK。默认多架构；CI 传 -PonlyArm64 只编 arm64-v8a
     splits {
         abi {
             isEnable = true
             reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            if (project.hasProperty("onlyArm64")) {
+                include("arm64-v8a")
+            } else {
+                include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            }
             isUniversalApk = false
         }
     }

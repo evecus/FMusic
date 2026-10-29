@@ -35,7 +35,7 @@ jobs:
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        run: ./gradlew assembleReleaseArm64V8a --no-daemon
+        run: ./gradlew assembleRelease -PonlyArm64 --no-daemon
 
       - name: Move and rename APK
         run: |
