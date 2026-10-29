@@ -232,6 +232,8 @@ private fun MainScaffold(
                     onPrevious = playViewModel::previous,
                     onSeek = playViewModel::seekTo,
                     onCycleMode = playViewModel::cyclePlayMode,
+                    onAddToList = { addToListTarget = it },
+                    onPlayQueueAt = playViewModel::playQueueAt,
                 )
             }
             composable("setting") {

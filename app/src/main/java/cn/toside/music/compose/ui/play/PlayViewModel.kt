@@ -66,6 +66,12 @@ class PlayViewModel(app: Application) : AndroidViewModel(app) {
     fun cyclePlayMode() = playerRepository.cyclePlayMode()
     fun consumeError() = playerRepository.consumeError()
 
+    /** 队列列表中点播某首（底部队列弹层用） */
+    fun playQueueAt(index: Int) {
+        val queue = playerRepository.uiState.value.queue
+        if (index in queue.indices) playerRepository.playList(queue, index)
+    }
+
     companion object {
         val Factory = viewModelFactory {
             initializer {
