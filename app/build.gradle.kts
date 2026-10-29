@@ -47,6 +47,8 @@ android {
             reset()
             if (project.hasProperty("onlyArm64")) {
                 include("arm64-v8a")
+            } else if (project.hasProperty("onlyArm-v7a")) {
+                include("armeabi-v7a")
             } else {
                 include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
             }
