@@ -57,6 +57,7 @@ data class MusicInfo(
     val source: String,
     val albumName: String?,
     val interval: String?,
+    val img: String?,
     val raw: JsonObject,
 ) {
     val uniqueKey: String get() = "$source-$id"
@@ -85,6 +86,8 @@ data class MusicInfo(
                 }
             }
             val interval = obj["interval"]?.jsonPrimitive?.contentOrNull
+            val img = obj["img"]?.jsonPrimitive?.contentOrNull
+                ?: obj["pic"]?.jsonPrimitive?.contentOrNull
             return MusicInfo(
                 id = id,
                 name = name,
@@ -92,6 +95,7 @@ data class MusicInfo(
                 source = source.ifEmpty { defaultSource },
                 albumName = album,
                 interval = interval,
+                img = img,
                 raw = obj,
             )
         }

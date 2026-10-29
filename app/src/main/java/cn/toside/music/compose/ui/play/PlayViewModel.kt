@@ -11,6 +11,7 @@ import cn.toside.music.compose.data.model.MusicInfo
 import cn.toside.music.compose.player.PlayerRepository
 import cn.toside.music.compose.player.PlayerUiState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,9 +49,13 @@ class PlayViewModel(app: Application) : AndroidViewModel(app) {
     private fun loadExtras(info: MusicInfo) {
         _extra.value = PlayExtraState(lyricLoading = true)
         viewModelScope.launch {
-            val lyric = playerRepository.loadLyric(info)
-            val pic = playerRepository.loadPic(info)
-            _extra.value = PlayExtraState(coverUrl = pic, lyric = lyric, lyricLoading = false)
+            // 封面与歌词并行加载：getPic 失败时回退到 musicInfo 自带的 img 字段
+            val picDeferred = async { playerRepository.loadPic(info) }
+            val lyricDeferred = async { playerRepository.loadLyric(info) }
+            val pic = picDeferred.await()
+            _extra.value = _extra.value.copy(coverUrl = pic ?: info.img)
+            val lyric = lyricDeferred.await()
+            _extra.value = _extra.value.copy(lyric = lyric, lyricLoading = false)
         }
     }
 

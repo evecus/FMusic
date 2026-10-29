@@ -66,6 +66,8 @@ class BuiltinSdkRuntime(
                 activeApiProvider()
             })
             // 加密 / 编码原生函数（builtin-sdk-preload 契约）
+            // 注意：builtin 沙箱的 aes 调用契约是 (data, key, iv, mode)，
+            // 与 user 沙箱一致；Crypto.aesXxx 签名为 (mode, data, key, iv)，此处做映射
             global.setProperty("__lx_native_call__utils_b64md5", JSCallFunction { args ->
                 Crypto.md5B64Hex(str(args, 0))
             })
@@ -76,10 +78,10 @@ class BuiltinSdkRuntime(
                 Crypto.sha1Hex(str(args, 0))
             })
             global.setProperty("__lx_native_call__utils_aes_encrypt", JSCallFunction { args ->
-                Crypto.aesEncrypt(str(args, 0), str(args, 1), str(args, 2), str(args, 3))
+                Crypto.aesEncrypt(str(args, 3), str(args, 0), str(args, 1), str(args, 2))
             })
             global.setProperty("__lx_native_call__utils_aes_decrypt", JSCallFunction { args ->
-                Crypto.aesDecrypt(str(args, 0), str(args, 1), str(args, 2), str(args, 3))
+                Crypto.aesDecrypt(str(args, 3), str(args, 0), str(args, 1), str(args, 2))
             })
             global.setProperty("__lx_native_call__utils_rsa_encrypt", JSCallFunction { args ->
                 Crypto.rsaEncrypt(str(args, 0), str(args, 1), str(args, 2).ifEmpty { "3" })

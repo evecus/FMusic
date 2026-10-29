@@ -20,8 +20,6 @@ import javax.crypto.spec.SecretKeySpec
  */
 object Crypto {
 
-    private const val AES_CBC = "AES/CBC/PKCS7Padding"
-    private const val AES_ECB = "AES/ECB/NoPadding"
     private const val RSA_NO_PADDING = "RSA/ECB/NoPadding"
 
     fun b64Encode(data: ByteArray): String =
@@ -42,25 +40,36 @@ object Crypto {
             .joinToString("") { "%02x".format(it) }
 
     /**
-     * aes-128-cbc / AES/CBC/PKCS7Padding → AES/CBC/PKCS7Padding；
-     * aes-128-ecb / AES → AES（NoPadding）。
+     * 模式判定（兼容两个沙箱的契约）：
+     *  - 含 CBC            → AES/CBC/PKCS7Padding（带 iv）
+     *  - 含 NoPadding      → AES/ECB/NoPadding（user 脚本 AES_MODE.ECB_128_NoPadding = 'AES'）
+     *  - 含 PKCS5 / PKCS7  → AES/ECB/PKCS5Padding（builtin wy eapi，Node 默认填充即 PKCS7，
+     *                        Java 对 16 字节分组的 PKCS5 等价 PKCS7）
+     *  - 其他              → AES/ECB/NoPadding（旧行为兜底）
      * data/key/iv 均为 base64，返回 base64。
      */
+    private fun cipherFor(mode: String, opMode: Int, key: javax.crypto.spec.SecretKeySpec, ivB64: String): Cipher = when {
+        mode.contains("CBC", ignoreCase = true) ->
+            Cipher.getInstance("AES/CBC/PKCS7Padding").apply {
+                init(opMode, key, IvParameterSpec(b64Decode(ivB64)))
+            }
+        mode.contains("NoPadding", ignoreCase = true) ->
+            Cipher.getInstance("AES/ECB/NoPadding").apply { init(opMode, key) }
+        mode.contains("PKCS5", ignoreCase = true) || mode.contains("PKCS7", ignoreCase = true) ->
+            Cipher.getInstance("AES/ECB/PKCS5Padding").apply { init(opMode, key) }
+        else ->
+            Cipher.getInstance("AES/ECB/NoPadding").apply { init(opMode, key) }
+    }
+
     fun aesEncrypt(mode: String, dataB64: String, keyB64: String, ivB64: String): String {
-        val useCbc = mode.contains("CBC", ignoreCase = true)
-        val cipher = Cipher.getInstance(if (useCbc) AES_CBC else AES_ECB)
         val key = SecretKeySpec(b64Decode(keyB64), "AES")
-        if (useCbc) cipher.init(Cipher.ENCRYPT_MODE, key, IvParameterSpec(b64Decode(ivB64)))
-        else cipher.init(Cipher.ENCRYPT_MODE, key)
+        val cipher = cipherFor(mode, Cipher.ENCRYPT_MODE, key, ivB64)
         return b64Encode(cipher.doFinal(b64Decode(dataB64)))
     }
 
     fun aesDecrypt(mode: String, dataB64: String, keyB64: String, ivB64: String): String {
-        val useCbc = mode.contains("CBC", ignoreCase = true)
-        val cipher = Cipher.getInstance(if (useCbc) AES_CBC else AES_ECB)
         val key = SecretKeySpec(b64Decode(keyB64), "AES")
-        if (useCbc) cipher.init(Cipher.DECRYPT_MODE, key, IvParameterSpec(b64Decode(ivB64)))
-        else cipher.init(Cipher.DECRYPT_MODE, key)
+        val cipher = cipherFor(mode, Cipher.DECRYPT_MODE, key, ivB64)
         return b64Encode(cipher.doFinal(b64Decode(dataB64)))
     }
 

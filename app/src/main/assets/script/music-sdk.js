@@ -12126,7 +12126,7 @@ ${lrclist ? lrclist.map((l) => `[${l.time}]${l.text}
         return bytes;
       };
       makeCipher = (decrypt2) => (algorithm, key, iv2) => {
-        const mode = algorithm === "aes-128-cbc" ? "AES/CBC/PKCS7Padding" : algorithm === "aes-128-ecb" ? "AES" : null;
+        const mode = algorithm === "aes-128-cbc" ? "AES/CBC/PKCS7Padding" : algorithm === "aes-128-ecb" ? "AES/ECB/PKCS5Padding" : null;
         if (!mode) throw new Error("Unsupported cipher algorithm: " + algorithm);
         const keyB64 = toB64(key);
         const ivB64 = iv2 && iv2.length ? toB64(iv2) : "";
@@ -14748,10 +14748,12 @@ ${lrclist ? lrclist.map((l) => `[${l.time}]${l.text}
           return apis("tx").getMusicUrl(songInfo, type);
         },
         getLyric(songInfo) {
-          return lyric_default3.getLyric(songInfo);
+          return lyric_default3.getLyric(songInfo.songmid);
         },
         getPic(songInfo) {
-          return apis("tx").getPic(songInfo);
+          return {
+            promise: Promise.resolve(`https://y.gtimg.cn/music/photo_new/T002R500x500M000${songInfo.albumId}.jpg`)
+          };
         },
         getMusicDetailPageUrl(songInfo) {
           return `https://y.qq.com/n/yqq/song/${songInfo.songmid}.html`;
