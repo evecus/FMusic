@@ -64,6 +64,22 @@ data class MusicInfo(
 
     fun toJson(): String = raw.toString()
 
+    /**
+     * 持久化用：在 raw 基础上补齐派生字段（raw 里可能没有 source/id 等规范化字段），
+     * 保证读回时无需外部上下文即可通过 [parse] 还原。
+     */
+    fun toPersistentJson(): JsonObject = JsonObject(
+        LinkedHashMap(raw).apply {
+            put("source", JsonPrimitive(source))
+            put("id", JsonPrimitive(id))
+            put("name", JsonPrimitive(name))
+            put("singer", JsonPrimitive(singer))
+            albumName?.let { put("albumName", JsonPrimitive(it)) }
+            interval?.let { put("interval", JsonPrimitive(it)) }
+            img?.let { put("img", JsonPrimitive(it)) }
+        },
+    )
+
     companion object {
         fun parse(obj: JsonObject, defaultSource: String = ""): MusicInfo? {
             val source = obj["source"]?.jsonPrimitive?.contentOrNull ?: defaultSource

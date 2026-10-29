@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.PlayCircle
@@ -17,6 +18,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -29,10 +33,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import cn.toside.music.compose.data.ThemeMode
+import cn.toside.music.compose.data.model.MusicInfo
 import cn.toside.music.compose.player.PlayerUiState
+import cn.toside.music.compose.ui.component.AddToListDialog
 import cn.toside.music.compose.ui.component.MiniPlayer
 import cn.toside.music.compose.ui.leaderboard.LeaderboardScreen
 import cn.toside.music.compose.ui.leaderboard.LeaderboardViewModel
+import cn.toside.music.compose.ui.mylist.MyListScreen
+import cn.toside.music.compose.ui.mylist.MyListViewModel
 import cn.toside.music.compose.ui.play.PlayScreen
 import cn.toside.music.compose.ui.play.PlayViewModel
 import cn.toside.music.compose.ui.search.SearchScreen
@@ -49,6 +57,7 @@ private val tabs = listOf(
     Tab("search", "搜索"),
     Tab("leaderboard", "排行"),
     Tab("songlist", "歌单"),
+    Tab("mylist", "收藏"),
     Tab("play", "播放"),
     Tab("setting", "设置"),
 )
@@ -62,6 +71,7 @@ fun MainScreen(modifier: Modifier = Modifier) {
     val searchViewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory)
     val leaderboardViewModel: LeaderboardViewModel = viewModel(factory = LeaderboardViewModel.Factory)
     val songListViewModel: SongListViewModel = viewModel(factory = SongListViewModel.Factory)
+    val myListViewModel: MyListViewModel = viewModel(factory = MyListViewModel.Factory)
     val playViewModel: PlayViewModel = viewModel(factory = PlayViewModel.Factory)
     val settingViewModel: SettingViewModel = viewModel(factory = SettingViewModel.Factory)
 
@@ -80,6 +90,7 @@ fun MainScreen(modifier: Modifier = Modifier) {
             searchViewModel = searchViewModel,
             leaderboardViewModel = leaderboardViewModel,
             songListViewModel = songListViewModel,
+            myListViewModel = myListViewModel,
             playViewModel = playViewModel,
             settingViewModel = settingViewModel,
             playerState = playerState,
@@ -95,11 +106,15 @@ private fun MainScaffold(
     searchViewModel: SearchViewModel,
     leaderboardViewModel: LeaderboardViewModel,
     songListViewModel: SongListViewModel,
+    myListViewModel: MyListViewModel,
     playViewModel: PlayViewModel,
     settingViewModel: SettingViewModel,
     playerState: PlayerUiState,
     modifier: Modifier = Modifier,
 ) {
+    // “收藏到歌单”弹窗目标（搜索/排行/歌单行的收藏按钮触发）
+    var addToListTarget by remember { mutableStateOf<MusicInfo?>(null) }
+    val myListsState by myListViewModel.uiState.collectAsState()
     Scaffold(
         modifier = modifier.fillMaxSize(),
         bottomBar = {
@@ -133,6 +148,7 @@ private fun MainScaffold(
                                         "search" -> Icons.Default.Home
                                         "leaderboard" -> Icons.Default.Leaderboard
                                         "songlist" -> Icons.Default.QueueMusic
+                                        "mylist" -> Icons.Default.Favorite
                                         "play" -> Icons.Default.PlayCircle
                                         else -> Icons.Default.Settings
                                     },
@@ -160,6 +176,7 @@ private fun MainScaffold(
                     onSourceChange = searchViewModel::setSource,
                     onPlay = searchViewModel::playAll,
                     onLoadMore = searchViewModel::loadMore,
+                    onAddToList = { addToListTarget = it },
                 )
             }
             composable("leaderboard") {
@@ -170,6 +187,7 @@ private fun MainScaffold(
                     onBoardSelect = leaderboardViewModel::selectBoard,
                     onPlay = leaderboardViewModel::playAt,
                     onLoadMore = leaderboardViewModel::loadMore,
+                    onAddToList = { addToListTarget = it },
                 )
             }
             composable("songlist") {
@@ -184,6 +202,23 @@ private fun MainScaffold(
                     onPlay = songListViewModel::playAt,
                     onLoadMoreLists = songListViewModel::loadMoreLists,
                     onLoadMoreDetail = songListViewModel::loadMoreDetail,
+                    onAddToList = { addToListTarget = it },
+                )
+            }
+            composable("mylist") {
+                val state by myListViewModel.uiState.collectAsState()
+                MyListScreen(
+                    state = state,
+                    onSelectList = myListViewModel::selectList,
+                    onCreateList = myListViewModel::createList,
+                    onRenameList = myListViewModel::renameList,
+                    onRemoveList = myListViewModel::removeList,
+                    onPlay = myListViewModel::playAt,
+                    onPlayAll = myListViewModel::playAll,
+                    onRemoveSong = myListViewModel::removeSongAt,
+                    onMoveSong = myListViewModel::moveSongAt,
+                    onClearList = myListViewModel::clearActiveList,
+                    onToastConsumed = myListViewModel::consumeToast,
                 )
             }
             composable("play") {
@@ -213,5 +248,18 @@ private fun MainScaffold(
                 )
             }
         }
+    }
+
+    // “收藏到歌单”弹窗（选择目标歌单即收藏）
+    addToListTarget?.let { song ->
+        AddToListDialog(
+            lists = myListsState.lists,
+            songName = "${song.name} - ${song.singer}",
+            onDismiss = { addToListTarget = null },
+            onSelect = { list ->
+                myListViewModel.addTo(list.id, song)
+                addToListTarget = null
+            },
+        )
     }
 }

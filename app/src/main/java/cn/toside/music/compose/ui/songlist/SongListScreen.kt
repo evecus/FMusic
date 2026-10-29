@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -69,6 +70,7 @@ fun SongListScreen(
     onPlay: (Int) -> Unit,
     onLoadMoreLists: () -> Unit,
     onLoadMoreDetail: () -> Unit,
+    onAddToList: (cn.toside.music.compose.data.model.MusicInfo) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val detail = state.detail
@@ -78,6 +80,7 @@ fun SongListScreen(
             detail = detail,
             onBack = onCloseDetail,
             onPlay = onPlay,
+            onAddToList = onAddToList,
             onLoadMore = onLoadMoreDetail,
             modifier = modifier,
         )
@@ -386,6 +389,7 @@ private fun SongListDetailContent(
     onBack: () -> Unit,
     onPlay: (Int) -> Unit,
     onLoadMore: () -> Unit,
+    onAddToList: (cn.toside.music.compose.data.model.MusicInfo) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -482,6 +486,7 @@ private fun SongListDetailContent(
                             index = index + 1,
                             info = info,
                             onClick = { onPlay(index) },
+                            onAddToList = { onAddToList(info) },
                         )
                     }
                     if (detail.loadingMore) {
@@ -517,7 +522,12 @@ private fun SongListDetailContent(
 }
 
 @Composable
-private fun SongRow(index: Int, info: cn.toside.music.compose.data.model.MusicInfo, onClick: () -> Unit) {
+private fun SongRow(
+    index: Int,
+    info: cn.toside.music.compose.data.model.MusicInfo,
+    onClick: () -> Unit,
+    onAddToList: () -> Unit,
+) {
     androidx.compose.material3.ListItem(
         leadingContent = {
             Text(
@@ -538,7 +548,12 @@ private fun SongRow(index: Int, info: cn.toside.music.compose.data.model.MusicIn
             )
         },
         trailingContent = {
-            AssistChip(onClick = {}, label = { Text(Sources.label(info.source)) })
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AssistChip(onClick = {}, label = { Text(Sources.label(info.source)) })
+                IconButton(onClick = onAddToList) {
+                    Icon(Icons.Default.PlaylistAdd, contentDescription = "收藏到歌单")
+                }
+            }
         },
         modifier = Modifier
             .fillMaxWidth()

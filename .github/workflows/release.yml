@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    name: Build APK
+    name: Build APK (arm64-v8a)
     runs-on: ubuntu-latest
 
     steps:
@@ -29,18 +29,18 @@ jobs:
       - name: Decode keystore
         run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
 
-      - name: Build signed release APK
+      - name: Build signed release APK (arm64-v8a only)
         env:
           RELEASE_STORE_FILE: ${{ github.workspace }}/release.keystore
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        run: ./gradlew assembleRelease --no-daemon
-      
+        run: ./gradlew assembleReleaseArm64V8a --no-daemon
+
       - name: Move and rename APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/release/*.apk out/FMusic.apk
+          cp app/build/outputs/apk/release/arm64-v8a/*.apk out/FMusic-arm64-v8a.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

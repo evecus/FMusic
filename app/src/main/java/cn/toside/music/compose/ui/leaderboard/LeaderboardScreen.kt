@@ -17,11 +17,13 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -54,6 +56,7 @@ fun LeaderboardScreen(
     onBoardSelect: (BoardItem) -> Unit,
     onPlay: (Int) -> Unit,
     onLoadMore: () -> Unit,
+    onAddToList: (MusicInfo) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -136,6 +139,7 @@ fun LeaderboardScreen(
                             rank = index + 1,
                             info = info,
                             onClick = { onPlay(index) },
+                            onAddToList = { onAddToList(info) },
                         )
                     }
                     if (state.loadingMore) {
@@ -209,7 +213,7 @@ fun LeaderboardScreen(
 }
 
 @Composable
-private fun RankedMusicRow(rank: Int, info: MusicInfo, onClick: () -> Unit) {
+private fun RankedMusicRow(rank: Int, info: MusicInfo, onClick: () -> Unit, onAddToList: () -> Unit) {
     androidx.compose.material3.ListItem(
         leadingContent = {
             Text(
@@ -236,7 +240,12 @@ private fun RankedMusicRow(rank: Int, info: MusicInfo, onClick: () -> Unit) {
             )
         },
         trailingContent = {
-            AssistChip(onClick = {}, label = { Text(Sources.label(info.source)) })
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AssistChip(onClick = {}, label = { Text(Sources.label(info.source)) })
+                IconButton(onClick = onAddToList) {
+                    Icon(Icons.Default.PlaylistAdd, contentDescription = "收藏到歌单")
+                }
+            }
         },
         modifier = Modifier
             .fillMaxWidth()

@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
@@ -48,6 +49,7 @@ fun SearchScreen(
     onSourceChange: (String) -> Unit,
     onPlay: (Int) -> Unit,
     onLoadMore: () -> Unit,
+    onAddToList: (MusicInfo) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -121,6 +123,7 @@ fun SearchScreen(
                         MusicRow(
                             info = info,
                             onClick = { onPlay(state.results.indexOf(info)) },
+                            onAddToList = { onAddToList(info) },
                         )
                     }
                     if (state.loadingMore) {
@@ -140,7 +143,7 @@ fun SearchScreen(
 }
 
 @Composable
-private fun MusicRow(info: MusicInfo, onClick: () -> Unit) {
+private fun MusicRow(info: MusicInfo, onClick: () -> Unit, onAddToList: () -> Unit) {
     androidx.compose.material3.ListItem(
         headlineContent = { Text(info.name, maxLines = 1) },
         supportingContent = {
@@ -154,7 +157,12 @@ private fun MusicRow(info: MusicInfo, onClick: () -> Unit) {
             )
         },
         trailingContent = {
-            AssistChip(onClick = {}, label = { Text(Sources.label(info.source)) })
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AssistChip(onClick = {}, label = { Text(Sources.label(info.source)) })
+                IconButton(onClick = onAddToList) {
+                    Icon(Icons.Default.PlaylistAdd, contentDescription = "收藏到歌单")
+                }
+            }
         },
         modifier = Modifier
             .fillMaxWidth()

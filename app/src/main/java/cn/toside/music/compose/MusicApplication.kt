@@ -1,6 +1,7 @@
 package cn.toside.music.compose
 
 import android.app.Application
+import cn.toside.music.compose.data.MyListRepository
 import cn.toside.music.compose.data.SettingsRepository
 import cn.toside.music.compose.data.UserScriptRepository
 import cn.toside.music.compose.js.UserApiController
@@ -17,6 +18,8 @@ class MusicGraph(private val app: Application) {
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(app) }
 
     val userScriptRepository: UserScriptRepository by lazy { UserScriptRepository(app) }
+
+    val myListRepository: MyListRepository by lazy { MyListRepository(app) }
 
     val jsController: UserApiController by lazy {
         UserApiController(userScriptMetaProvider = { text -> userScriptRepository.parseMetaJson(text) })
