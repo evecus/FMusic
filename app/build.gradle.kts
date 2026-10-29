@@ -16,6 +16,18 @@ android {
         versionCode = 1
         versionName = "1.0.0"
     }
+    
+    signingConfigs {
+        create("release") {
+            val envStore = System.getenv("RELEASE_STORE_FILE")
+            if (envStore != null && file(envStore).exists()) {
+                storeFile = file(envStore)
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
 
     buildTypes {
         release {
