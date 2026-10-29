@@ -4,17 +4,10 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Leaderboard
-import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.QueueMusic
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,22 +44,25 @@ import cn.toside.music.compose.ui.songlist.SongListScreen
 import cn.toside.music.compose.ui.songlist.SongListViewModel
 import cn.toside.music.compose.ui.theme.LxMusicTheme
 
-private data class Tab(val route: String, val label: String)
+private data class NavTab(val route: String, val label: String)
 
+/** 顶部导航 Tab（播放不在其中：播放页仅通过底部迷你播放条进入） */
 private val tabs = listOf(
-    Tab("search", "搜索"),
-    Tab("leaderboard", "排行"),
-    Tab("songlist", "歌单"),
-    Tab("mylist", "收藏"),
-    Tab("play", "播放"),
-    Tab("setting", "设置"),
+    NavTab("search", "搜索"),
+    NavTab("leaderboard", "排行"),
+    NavTab("songlist", "歌单"),
+    NavTab("mylist", "收藏"),
+    NavTab("setting", "设置"),
 )
+
+/** 搜索页与播放页为独立全屏页面，不显示顶部导航与迷你播放条 */
+private val chromelessRoutes = setOf("search", "play")
 
 @Composable
 fun MainScreen(modifier: Modifier = Modifier) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = backStackEntry?.destination?.route ?: "search"
+    val currentRoute = backStackEntry?.destination?.route ?: "mylist"
 
     val searchViewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory)
     val leaderboardViewModel: LeaderboardViewModel = viewModel(factory = LeaderboardViewModel.Factory)
@@ -115,26 +111,19 @@ private fun MainScaffold(
     // “收藏到歌单”弹窗目标（搜索/排行/歌单行的收藏按钮触发）
     var addToListTarget by remember { mutableStateOf<MusicInfo?>(null) }
     val myListsState by myListViewModel.uiState.collectAsState()
+
+    // 搜索 / 播放为独立全屏页面：不显示顶部导航与迷你播放条
+    val showChrome = currentRoute !in chromelessRoutes
+    val selectedTabIndex = tabs.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        bottomBar = {
-            Column {
-                MiniPlayer(
-                    state = playerState,
-                    onToggle = playViewModel::togglePlay,
-                    onClick = {
-                        navController.navigate("play") {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
-                )
-                NavigationBar {
+        topBar = {
+            if (showChrome) {
+                TabRow(selectedTabIndex = selectedTabIndex) {
                     tabs.forEach { tab ->
-                        val selected = currentRoute == tab.route
-                        NavigationBarItem(
-                            selected = selected,
+                        Tab(
+                            selected = currentRoute == tab.route,
                             onClick = {
                                 navController.navigate(tab.route) {
                                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -142,29 +131,26 @@ private fun MainScaffold(
                                     restoreState = true
                                 }
                             },
-                            icon = {
-                                Icon(
-                                    imageVector = when (tab.route) {
-                                        "search" -> Icons.Default.Home
-                                        "leaderboard" -> Icons.Default.Leaderboard
-                                        "songlist" -> Icons.Default.QueueMusic
-                                        "mylist" -> Icons.Default.Favorite
-                                        "play" -> Icons.Default.PlayCircle
-                                        else -> Icons.Default.Settings
-                                    },
-                                    contentDescription = tab.label,
-                                )
-                            },
-                            label = { Text(tab.label) },
+                            text = { Text(tab.label) },
                         )
                     }
                 }
             }
         },
+        bottomBar = {
+            if (showChrome) {
+                MiniPlayer(
+                    state = playerState,
+                    onToggle = playViewModel::togglePlay,
+                    // 播放页唯一入口：直接压栈，返回时回到原页面
+                    onClick = { navController.navigate("play") { launchSingleTop = true } },
+                )
+            }
+        },
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = "search",
+            startDestination = "mylist",
             modifier = Modifier.padding(padding),
         ) {
             composable("search") {
@@ -232,6 +218,7 @@ private fun MainScaffold(
                     onPrevious = playViewModel::previous,
                     onSeek = playViewModel::seekTo,
                     onCycleMode = playViewModel::cyclePlayMode,
+                    onBack = { navController.popBackStack() },
                     onAddToList = { addToListTarget = it },
                     onPlayQueueAt = playViewModel::playQueueAt,
                 )

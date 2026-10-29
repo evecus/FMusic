@@ -75,6 +75,7 @@ fun PlayScreen(
     onPrevious: () -> Unit,
     onSeek: (Long) -> Unit,
     onCycleMode: () -> Unit,
+    onBack: () -> Unit,
     onAddToList: (MusicInfo) -> Unit,
     onPlayQueueAt: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -103,8 +104,8 @@ fun PlayScreen(
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { /* Tab 页面，无返回动作 */ }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null,
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.size(8.dp))
