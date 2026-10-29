@@ -1,0 +1,7 @@
+# Declare files that will always have LF line endings on checkout.
+* text eol=lf
+*.bat text eol=crlf
+*.jar binary
+*.aar binary
+*.png binary
+*.webp binary
