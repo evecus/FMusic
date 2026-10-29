@@ -40,7 +40,7 @@ jobs:
       - name: Move and rename APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/release/arm64-v8a/*.apk out/FMusic-arm64-v8a.apk
+          cp app/build/outputs/apk/release/*.apk out/FMusic-arm64-v8a.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
