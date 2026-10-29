@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -12,13 +13,18 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
 import cn.toside.music.compose.data.MyListMeta
+import cn.toside.music.compose.ui.adaptive.LocalAdaptive
 
 /**
  * “收藏到歌单”选择弹窗：列出全部歌单（内置 + 自建），点击即收藏。
+ * TV 上弹窗整体可聚焦并加宽，列表项可被遥控器聚焦。
  */
 @Composable
 fun AddToListDialog(
@@ -27,8 +33,14 @@ fun AddToListDialog(
     onDismiss: () -> Unit,
     onSelect: (MyListMeta) -> Unit,
 ) {
+    val adaptive = LocalAdaptive.current
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier
+            .lxFocusable(focusRequester = focusRequester, showBorder = false)
+            .then(if (adaptive.isTv) Modifier.widthIn(min = 420.dp, max = 560.dp) else Modifier),
         confirmButton = {},
         title = { Text("收藏到歌单") },
         text = {
@@ -48,13 +60,15 @@ fun AddToListDialog(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 320.dp),
+                            .heightIn(max = if (adaptive.isTv) 400.dp else 320.dp),
                     ) {
                         items(lists, key = { it.id }) { list ->
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { onSelect(list) },
+                                    .heightIn(min = adaptive.rowHeight)
+                                    .clickable { onSelect(list) }
+                                    .lxFocusable(),
                                 horizontalAlignment = Alignment.Start,
                             ) {
                                 Text(
@@ -75,6 +89,7 @@ fun AddToListDialog(
                 "取消",
                 modifier = Modifier
                     .clickable(onClick = onDismiss)
+                    .lxFocusable()
                     .padding(16.dp),
             )
         },

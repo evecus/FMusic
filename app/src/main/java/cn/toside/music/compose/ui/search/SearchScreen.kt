@@ -1,6 +1,7 @@
 package cn.toside.music.compose.ui.search
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -39,6 +42,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import cn.toside.music.compose.data.model.MusicInfo
 import cn.toside.music.compose.data.model.Sources
+import cn.toside.music.compose.ui.adaptive.LocalAdaptive
+import cn.toside.music.compose.ui.component.LxIconButton
+import cn.toside.music.compose.ui.component.lxFocusable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,6 +58,7 @@ fun SearchScreen(
     onAddToList: (MusicInfo) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val adaptive = LocalAdaptive.current
     val listState = rememberLazyListState()
     val shouldLoadMore by remember {
         derivedStateOf {
@@ -69,15 +76,17 @@ fun SearchScreen(
             onValueChange = onKeywordChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = adaptive.pagePadding, vertical = 8.dp),
             placeholder = { Text("搜索歌曲 / 歌手") },
             singleLine = true,
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             trailingIcon = {
                 if (state.keyword.isNotEmpty()) {
-                    IconButton(onClick = { onKeywordChange("") }) {
-                        Icon(Icons.Default.Clear, contentDescription = "清空")
-                    }
+                    LxIconButton(
+                        onClick = { onKeywordChange("") },
+                        imageVector = Icons.Default.Clear,
+                        contentDescription = "清空",
+                    )
                 }
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -87,7 +96,8 @@ fun SearchScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = adaptive.pagePadding),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             state.enabledSources.forEach { source ->
@@ -95,6 +105,7 @@ fun SearchScreen(
                     selected = state.source == source,
                     onClick = { onSourceChange(source) },
                     label = { Text(Sources.label(source)) },
+                    modifier = Modifier.lxFocusable(shape = CircleShape),
                 )
             }
         }
@@ -159,13 +170,16 @@ private fun MusicRow(info: MusicInfo, onClick: () -> Unit, onAddToList: () -> Un
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AssistChip(onClick = {}, label = { Text(Sources.label(info.source)) })
-                IconButton(onClick = onAddToList) {
-                    Icon(Icons.Default.PlaylistAdd, contentDescription = "收藏到歌单")
-                }
+                LxIconButton(
+                    onClick = onAddToList,
+                    imageVector = Icons.Default.PlaylistAdd,
+                    contentDescription = "收藏到歌单",
+                )
             }
         },
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .lxFocusable(),
     )
 }

@@ -3,11 +3,16 @@ package cn.toside.music.compose.ui.mylist
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -18,7 +23,6 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LibraryMusic
@@ -26,13 +30,12 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
@@ -42,6 +45,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -55,16 +59,26 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import cn.toside.music.compose.data.MyListMeta
 import cn.toside.music.compose.data.model.MusicInfo
 import cn.toside.music.compose.data.model.Sources
+import cn.toside.music.compose.ui.adaptive.AdaptiveInfo
+import cn.toside.music.compose.ui.adaptive.LocalAdaptive
+import cn.toside.music.compose.ui.component.LxIconButton
+import cn.toside.music.compose.ui.component.lxFocusable
 import kotlinx.coroutines.launch
 
 /**
  * “收藏”页（对齐 mobile 版 Mylist）：
- * 左侧抽屉为歌单列表（试听列表 / 我的收藏 / 自建歌单，支持新建 / 重命名 / 删除），
- * 右侧为当前歌单的歌曲列表（点击播放、收藏到其他歌单、移除、上下移动）。
+ * 歌单列表（试听列表 / 我的收藏 / 自建歌单，支持新建 / 重命名 / 删除）+ 当前歌单歌曲列表。
+ *
+ * 三端形态：
+ *  - 手机  ：歌单列表放 [ModalNavigationDrawer] 抽屉，顶栏按钮打开；
+ *  - 平板 / TV：歌单列表常驻为左侧栏，右侧为歌曲列表，无抽屉。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,7 +96,8 @@ fun MyListScreen(
     onToastConsumed: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val drawerState = rememberDrawerState(androidx.compose.material3.DrawerValue.Closed)
+    val adaptive = LocalAdaptive.current
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -99,106 +114,75 @@ fun MyListScreen(
         }
     }
 
-    ModalNavigationDrawer(
-        modifier = modifier,
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet {
-                Text(
-                    "我的歌单",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(16.dp),
-                )
-                HorizontalDivider()
-                LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(state.lists, key = { it.id }) { list ->
-                        DrawerListItem(
-                            list = list,
-                            active = list.id == state.activeListId,
-                            onSelect = {
-                                onSelectList(list.id)
-                                scope.launch { drawerState.close() }
-                            },
-                            onRename = { renameTarget = list },
-                            onRemove = { removeTarget = list },
-                        )
-                    }
-                }
-                OutlinedButton(
-                    onClick = { showCreateDialog = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Spacer(Modifier.padding(4.dp))
-                    Text("新建歌单")
-                }
-            }
-        },
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Column {
-                            Text(activeList?.name ?: "收藏", maxLines = 1)
-                            Text(
-                                "${state.songs.size} 首",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Default.LibraryMusic, contentDescription = "歌单列表")
-                        }
-                    },
-                    actions = {
-                        if (state.songs.isNotEmpty()) {
-                            IconButton(onClick = onPlayAll) {
-                                Icon(Icons.Default.PlayCircle, contentDescription = "播放全部")
-                            }
-                            IconButton(onClick = onClearList) {
-                                Icon(Icons.Default.DeleteSweep, contentDescription = "清空")
-                            }
-                        }
-                    },
-                )
-            },
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-        ) { padding ->
-            if (state.songs.isEmpty()) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "歌单暂无歌曲，去搜索页收藏吧",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    if (adaptive.isPhone) {
+        // ── 手机：抽屉式歌单列表 ───────────────────────────────────
+        ModalNavigationDrawer(
+            modifier = modifier,
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet {
+                    PlaylistPane(
+                        lists = state.lists,
+                        activeListId = state.activeListId,
+                        rowHeight = adaptive.rowHeight,
+                        onSelect = {
+                            onSelectList(it)
+                            scope.launch { drawerState.close() }
+                        },
+                        onCreate = { showCreateDialog = true },
+                        onRename = { renameTarget = it },
+                        onRemove = { removeTarget = it },
                     )
                 }
-            } else {
-                LazyColumn(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                ) {
-                    itemsIndexed(state.songs, key = { _, it -> it.uniqueKey }) { index, song ->
-                        SongRow(
-                            index = index,
-                            info = song,
-                            onClick = { onPlay(index) },
-                            onRemove = { onRemoveSong(index) },
-                            onMoveUp = { onMoveSong(index, -1) },
-                            onMoveDown = { onMoveSong(index, +1) },
-                        )
-                        HorizontalDivider()
-                    }
-                }
+            },
+        ) {
+            SongListPane(
+                activeName = activeList?.name ?: "收藏",
+                songs = state.songs,
+                adaptive = adaptive,
+                showMenuButton = true,
+                onOpenMenu = { scope.launch { drawerState.open() } },
+                onPlay = onPlay,
+                onPlayAll = onPlayAll,
+                onRemoveSong = onRemoveSong,
+                onMoveSong = onMoveSong,
+                onClearList = onClearList,
+                snackbarHostState = snackbarHostState,
+            )
+        }
+    } else {
+        // ── 平板 / TV：常驻侧栏 + 右侧内容 ────────────────────────
+        Row(modifier = modifier.fillMaxSize()) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(if (adaptive.isTv) 340.dp else 280.dp),
+                tonalElevation = 1.dp,
+            ) {
+                PlaylistPane(
+                    lists = state.lists,
+                    activeListId = state.activeListId,
+                    rowHeight = adaptive.rowHeight,
+                    onSelect = onSelectList,
+                    onCreate = { showCreateDialog = true },
+                    onRename = { renameTarget = it },
+                    onRemove = { removeTarget = it },
+                )
+            }
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                SongListPane(
+                    activeName = activeList?.name ?: "收藏",
+                    songs = state.songs,
+                    adaptive = adaptive,
+                    showMenuButton = false,
+                    onOpenMenu = {},
+                    onPlay = onPlay,
+                    onPlayAll = onPlayAll,
+                    onRemoveSong = onRemoveSong,
+                    onMoveSong = onMoveSong,
+                    onClearList = onClearList,
+                    snackbarHostState = snackbarHostState,
+                )
             }
         }
     }
@@ -227,27 +211,69 @@ fun MyListScreen(
         )
     }
     removeTarget?.let { target ->
-        AlertDialog(
-            onDismissRequest = { removeTarget = null },
-            title = { Text("删除歌单") },
-            text = { Text("确定删除「${target.name}」吗？歌单内歌曲将一并清除。") },
-            confirmButton = {
-                TextButton(onClick = {
-                    onRemoveList(target.id)
-                    removeTarget = null
-                }) { Text("删除") }
-            },
-            dismissButton = {
-                TextButton(onClick = { removeTarget = null }) { Text("取消") }
+        RemoveListDialog(
+            name = target.name,
+            onDismiss = { removeTarget = null },
+            onConfirm = {
+                onRemoveList(target.id)
+                removeTarget = null
             },
         )
     }
 }
 
+/** 歌单列表（手机抽屉内容与平板 / TV 常驻侧栏共用） */
 @Composable
-private fun DrawerListItem(
+private fun PlaylistPane(
+    lists: List<MyListMeta>,
+    activeListId: String,
+    rowHeight: Dp,
+    onSelect: (String) -> Unit,
+    onCreate: () -> Unit,
+    onRename: (MyListMeta) -> Unit,
+    onRemove: (MyListMeta) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxSize()) {
+        Text(
+            "我的歌单",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(16.dp),
+        )
+        HorizontalDivider()
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            items(lists, key = { it.id }) { list ->
+                PlaylistRow(
+                    list = list,
+                    active = list.id == activeListId,
+                    rowHeight = rowHeight,
+                    onSelect = { onSelect(list.id) },
+                    onRename = { onRename(list) },
+                    onRemove = { onRemove(list) },
+                )
+            }
+        }
+        HorizontalDivider()
+        OutlinedButton(
+            onClick = onCreate,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .lxFocusable(),
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null)
+            Spacer(Modifier.padding(4.dp))
+            Text("新建歌单")
+        }
+    }
+}
+
+/** 单条歌单：点击切换、⋮ 菜单可重命名 / 删除（TV 上整行与菜单按钮均可聚焦） */
+@Composable
+private fun PlaylistRow(
     list: MyListMeta,
     active: Boolean,
+    rowHeight: Dp,
     onSelect: () -> Unit,
     onRename: () -> Unit,
     onRemove: () -> Unit,
@@ -256,7 +282,9 @@ private fun DrawerListItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = rowHeight)
             .clickable(onClick = onSelect)
+            .lxFocusable()
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -278,9 +306,11 @@ private fun DrawerListItem(
         )
         if (!list.builtin) {
             Box {
-                IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "歌单菜单")
-                }
+                LxIconButton(
+                    onClick = { menuOpen = true },
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "歌单菜单",
+                )
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     DropdownMenuItem(
                         text = { Text("重命名") },
@@ -289,6 +319,7 @@ private fun DrawerListItem(
                             menuOpen = false
                             onRename()
                         },
+                        modifier = Modifier.lxFocusable(),
                     )
                     DropdownMenuItem(
                         text = { Text("删除") },
@@ -297,6 +328,7 @@ private fun DrawerListItem(
                             menuOpen = false
                             onRemove()
                         },
+                        modifier = Modifier.lxFocusable(),
                     )
                 }
             }
@@ -305,10 +337,105 @@ private fun DrawerListItem(
     HorizontalDivider()
 }
 
+/** 右侧歌曲列表区域（手机 / 平板 / TV 共用） */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SongListPane(
+    activeName: String,
+    songs: List<MusicInfo>,
+    adaptive: AdaptiveInfo,
+    showMenuButton: Boolean,
+    onOpenMenu: () -> Unit,
+    onPlay: (Int) -> Unit,
+    onPlayAll: () -> Unit,
+    onRemoveSong: (Int) -> Unit,
+    onMoveSong: (Int, Int) -> Unit,
+    onClearList: () -> Unit,
+    snackbarHostState: SnackbarHostState,
+    modifier: Modifier = Modifier,
+) {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(activeName, maxLines = 1)
+                        Text(
+                            "${songs.size} 首",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                navigationIcon = {
+                    if (showMenuButton) {
+                        LxIconButton(
+                            onClick = onOpenMenu,
+                            imageVector = Icons.Default.LibraryMusic,
+                            contentDescription = "歌单列表",
+                        )
+                    }
+                },
+                actions = {
+                    if (songs.isNotEmpty()) {
+                        LxIconButton(
+                            onClick = onPlayAll,
+                            imageVector = Icons.Default.PlayCircle,
+                            contentDescription = "播放全部",
+                        )
+                        LxIconButton(
+                            onClick = onClearList,
+                            imageVector = Icons.Default.DeleteSweep,
+                            contentDescription = "清空",
+                        )
+                    }
+                },
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+    ) { padding ->
+        if (songs.isEmpty()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "歌单暂无歌曲，去搜索页收藏吧",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = PaddingValues(horizontal = adaptive.pagePadding),
+            ) {
+                itemsIndexed(songs, key = { _, it -> it.uniqueKey }) { index, song ->
+                    SongRow(
+                        index = index,
+                        info = song,
+                        rowHeight = adaptive.rowHeight,
+                        onClick = { onPlay(index) },
+                        onRemove = { onRemoveSong(index) },
+                        onMoveUp = { onMoveSong(index, -1) },
+                        onMoveDown = { onMoveSong(index, +1) },
+                    )
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun SongRow(
     index: Int,
     info: MusicInfo,
+    rowHeight: Dp,
     onClick: () -> Unit,
     onRemove: () -> Unit,
     onMoveUp: () -> Unit,
@@ -337,9 +464,11 @@ private fun SongRow(
         },
         trailingContent = {
             Box {
-                IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "歌曲菜单")
-                }
+                LxIconButton(
+                    onClick = { menuOpen = true },
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "歌曲菜单",
+                )
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     DropdownMenuItem(
                         text = { Text("上移") },
@@ -348,6 +477,7 @@ private fun SongRow(
                             menuOpen = false
                             onMoveUp()
                         },
+                        modifier = Modifier.lxFocusable(),
                     )
                     DropdownMenuItem(
                         text = { Text("下移") },
@@ -356,6 +486,7 @@ private fun SongRow(
                             menuOpen = false
                             onMoveDown()
                         },
+                        modifier = Modifier.lxFocusable(),
                     )
                     DropdownMenuItem(
                         text = { Text("移除出歌单") },
@@ -364,14 +495,28 @@ private fun SongRow(
                             menuOpen = false
                             onRemove()
                         },
+                        modifier = Modifier.lxFocusable(),
                     )
                 }
             }
         },
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .heightIn(min = rowHeight)
+            .clickable(onClick = onClick)
+            .lxFocusable(),
     )
+}
+
+/** 弹窗通用修饰：TV 上加宽，并保证弹窗自身可被遥控器聚焦（焦点不跑到下层页面） */
+@Composable
+private fun dialogModifier(
+    focusRequester: FocusRequester? = null,
+): Modifier {
+    val adaptive = LocalAdaptive.current
+    return Modifier
+        .lxFocusable(focusRequester = focusRequester, showBorder = false)
+        .then(if (adaptive.isTv) Modifier.widthIn(min = 420.dp, max = 560.dp) else Modifier)
 }
 
 @Composable
@@ -382,8 +527,11 @@ private fun NameInputDialog(
     onConfirm: (String) -> Unit,
 ) {
     var name by remember { mutableStateOf(initial) }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = dialogModifier(),
         title = { Text(title) },
         text = {
             OutlinedTextField(
@@ -391,16 +539,42 @@ private fun NameInputDialog(
                 onValueChange = { name = it },
                 singleLine = true,
                 placeholder = { Text("歌单名称") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester),
             )
         },
         confirmButton = {
             TextButton(
                 onClick = { if (name.isNotBlank()) onConfirm(name) },
                 enabled = name.isNotBlank(),
+                modifier = Modifier.lxFocusable(),
             ) { Text("确定") }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss, modifier = Modifier.lxFocusable()) { Text("取消") }
+        },
+    )
+}
+
+@Composable
+private fun RemoveListDialog(
+    name: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = dialogModifier(focusRequester = focusRequester),
+        title = { Text("删除歌单") },
+        text = { Text("确定删除「$name」吗？歌单内歌曲将一并清除。") },
+        confirmButton = {
+            TextButton(onClick = onConfirm, modifier = Modifier.lxFocusable()) { Text("删除") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.lxFocusable()) { Text("取消") }
         },
     )
 }

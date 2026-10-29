@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -33,7 +35,7 @@ import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
@@ -50,6 +52,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
@@ -58,12 +65,17 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import cn.toside.music.compose.data.model.MusicInfo
 import cn.toside.music.compose.player.PlayerUiState
+import cn.toside.music.compose.ui.adaptive.LocalAdaptive
+import cn.toside.music.compose.ui.component.LxIconButton
+import cn.toside.music.compose.ui.component.lxFocusable
 import kotlinx.coroutines.launch
 
 /**
- * 播放页（对齐 mobile 版播放页交互）：
- * 中部为可横滑双页——第 1 页封面，第 2 页歌词逐行高亮自动滚动（左滑看歌词、右滑回封面）；
+ * 播放页（三端自适应）：
+ *  - 手机  ：中部双页横滑（第 1 页封面，第 2 页歌词逐行高亮自动滚动），支持方向键左右切页
+ *  - 平板 / TV：左右分栏同时显示封面与歌词，无需滑动
  * 底部为进度条 + 三键控制 + 功能行（歌词切换 / 收藏 / 播放模式 / 播放队列）。
+ * 遥控器场景：所有控件可聚焦，进入页面自动把焦点落到播放/暂停键。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,6 +100,7 @@ fun PlayScreen(
         return
     }
 
+    val adaptive = LocalAdaptive.current
     val pagerState = rememberPagerState(pageCount = { 2 })
     val scope = rememberCoroutineScope()
     var showQueueSheet by remember { mutableStateOf(false) }
@@ -95,6 +108,12 @@ fun PlayScreen(
     var seeking by remember(info.uniqueKey) { mutableFloatStateOf(0f) }
     val positionSec = (state.positionMs / 1000).toInt()
     val durationSec = (state.durationMs / 1000).toInt()
+
+    // TV：进入播放页自动落焦点到播放/暂停键，避免遥控器没有起点
+    val playFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        if (adaptive.isTv) runCatching { playFocus.requestFocus() }
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         // ── 顶栏：歌名 + 歌手（对齐 mobile 顶栏布局） ──
@@ -104,10 +123,12 @@ fun PlayScreen(
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            LxIconButton(
+                onClick = onBack,
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "返回",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Spacer(Modifier.size(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(info.name, style = MaterialTheme.typography.titleLarge, maxLines = 1)
@@ -120,37 +141,128 @@ fun PlayScreen(
             }
         }
 
-        // ── 中部：双页横滑（封面 ↔ 歌词） ──
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-        ) { page ->
-            if (page == 0) {
-                CoverPage(info = info, coverUrl = extra.coverUrl)
-            } else {
-                LyricsPage(state = state, extra = extra)
+        // ── 中部：手机双页横滑；平板 / TV 左右分栏 ──
+        if (adaptive.twoPane) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CoverSurface(
+                        info = info,
+                        coverUrl = extra.coverUrl,
+                        fraction = if (adaptive.isTv) 0.85f else 0.9f,
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxSize(),
+                ) {
+                    LyricsPage(state = state, extra = extra)
+                }
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    // 方向键左右切页（外接键盘 / 遥控器）
+                    .onPreviewKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (event.key) {
+                            Key.DirectionLeft -> {
+                                if (pagerState.currentPage > 0) {
+                                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                                }
+                                true
+                            }
+                            Key.DirectionRight -> {
+                                if (pagerState.currentPage < 1) {
+                                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                                }
+                                true
+                            }
+                            else -> false
+                        }
+                    },
+            ) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                ) { page ->
+                    if (page == 0) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CoverSurface(info = info, coverUrl = extra.coverUrl, fraction = 0.78f)
+                        }
+                    } else {
+                        LyricsPage(state = state, extra = extra)
+                    }
+                }
             }
         }
 
-        // ── 进度条 ──
-        Slider(
-            value = if (seeking > 0f) seeking else state.positionMs.toFloat(),
-            onValueChange = { seeking = it },
-            onValueChangeFinished = {
-                onSeek(seeking.toLong())
-                seeking = 0f
-            },
-            valueRange = 0f..(state.durationMs.coerceAtLeast(1)).toFloat(),
-            colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-        )
+        // ── 进度条（TV 端用按钮快进快退，避免依赖拖拽） ──
+        if (adaptive.isTv) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = adaptive.pagePadding, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                LxIconButton(
+                    onClick = { onSeek((state.positionMs - 10_000).coerceAtLeast(0)) },
+                    imageVector = Icons.Default.FastRewind,
+                    contentDescription = "快退 10 秒",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                LinearProgressIndicator(
+                    progress = {
+                        if (state.durationMs > 0) {
+                            (state.positionMs.toFloat() / state.durationMs.toFloat()).coerceIn(0f, 1f)
+                        } else 0f
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                )
+                LxIconButton(
+                    onClick = {
+                        if (state.durationMs > 0) {
+                            onSeek((state.positionMs + 10_000).coerceAtMost(state.durationMs))
+                        }
+                    },
+                    imageVector = Icons.Default.FastForward,
+                    contentDescription = "快进 10 秒",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            Slider(
+                value = if (seeking > 0f) seeking else state.positionMs.toFloat(),
+                onValueChange = { seeking = it },
+                onValueChangeFinished = {
+                    onSeek(seeking.toLong())
+                    seeking = 0f
+                },
+                valueRange = 0f..(state.durationMs.coerceAtLeast(1)).toFloat(),
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+            )
+        }
         Row(
             Modifier
                 .fillMaxWidth()
@@ -186,27 +298,20 @@ fun PlayScreen(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onPrevious) {
-                Icon(
-                    Icons.Default.SkipPrevious,
-                    contentDescription = "上一首",
-                    modifier = Modifier.size(40.dp),
-                )
-            }
-            IconButton(onClick = onToggle, modifier = Modifier.size(72.dp)) {
+            LxIconButton(onClick = onPrevious, imageVector = Icons.Default.SkipPrevious, contentDescription = "上一首")
+            IconButton(
+                onClick = onToggle,
+                modifier = Modifier
+                    .size(if (adaptive.isTv) 96.dp else 72.dp)
+                    .lxFocusable(focusRequester = playFocus, shape = CircleShape),
+            ) {
                 Icon(
                     imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = if (state.isPlaying) "暂停" else "播放",
-                    modifier = Modifier.size(64.dp),
+                    modifier = Modifier.size(if (adaptive.isTv) 80.dp else 64.dp),
                 )
             }
-            IconButton(onClick = onNext) {
-                Icon(
-                    Icons.Default.SkipNext,
-                    contentDescription = "下一首",
-                    modifier = Modifier.size(40.dp),
-                )
-            }
+            LxIconButton(onClick = onNext, imageVector = Icons.Default.SkipNext, contentDescription = "下一首")
         }
 
         // ── 底部功能行：LRC / 收藏 / 播放模式 / 队列 ──
@@ -217,41 +322,40 @@ fun PlayScreen(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = {
-                scope.launch {
-                    pagerState.animateScrollToPage(if (pagerState.currentPage == 1) 0 else 1)
-                }
-            }) {
-                Icon(
-                    Icons.Default.Subtitles,
+            // 封面 / 歌词切换：TV 为分栏，隐藏该按钮
+            if (!adaptive.twoPane) {
+                LxIconButton(
+                    onClick = {
+                        scope.launch {
+                            pagerState.animateScrollToPage(if (pagerState.currentPage == 1) 0 else 1)
+                        }
+                    },
+                    imageVector = Icons.Default.Subtitles,
                     contentDescription = "歌词",
                     tint = if (pagerState.currentPage == 1) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            IconButton(onClick = { onAddToList(info) }) {
-                Icon(
-                    Icons.Default.FavoriteBorder,
-                    contentDescription = "收藏到歌单",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(onClick = onCycleMode) {
-                Icon(
-                    Icons.Default.Shuffle,
-                    contentDescription = "播放模式",
-                    tint = if (state.playMode == cn.toside.music.compose.player.PlayMode.SHUFFLE)
-                        MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(onClick = { showQueueSheet = true }) {
-                Icon(
-                    Icons.Default.QueueMusic,
-                    contentDescription = "播放队列",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            LxIconButton(
+                onClick = { onAddToList(info) },
+                imageVector = Icons.Default.FavoriteBorder,
+                contentDescription = "收藏到歌单",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            LxIconButton(
+                onClick = onCycleMode,
+                imageVector = Icons.Default.Shuffle,
+                contentDescription = "播放模式",
+                tint = if (state.playMode == cn.toside.music.compose.player.PlayMode.SHUFFLE)
+                    MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            LxIconButton(
+                onClick = { showQueueSheet = true },
+                imageVector = Icons.Default.QueueMusic,
+                contentDescription = "播放队列",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 
@@ -273,6 +377,7 @@ fun PlayScreen(
                                 showQueueSheet = false
                                 onPlayQueueAt(index)
                             }
+                            .lxFocusable()
                             .padding(horizontal = 20.dp, vertical = 10.dp),
                     ) {
                         Text(
@@ -296,38 +401,36 @@ fun PlayScreen(
     }
 }
 
-/** 第 1 页：封面 */
+/** 封面卡片：封面图，无图时显示占位图标 */
 @Composable
-private fun CoverPage(info: MusicInfo, coverUrl: String?) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.72f)
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (coverUrl != null) {
-                AsyncImage(
-                    model = coverUrl,
-                    contentDescription = info.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                Icon(
-                    Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxSize(0.4f),
-                )
-            }
+private fun CoverSurface(info: MusicInfo, coverUrl: String?, fraction: Float) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(fraction)
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (coverUrl != null) {
+            AsyncImage(
+                model = coverUrl,
+                contentDescription = info.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Icon(
+                Icons.Default.PlayArrow,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxSize(0.4f),
+            )
         }
     }
 }
 
-/** 第 2 页：歌词逐行显示，当前行高亮并自动滚动到屏幕中部 */
+/** 歌词：逐行显示，当前行高亮并自动滚动到偏上位置 */
 @Composable
 private fun LyricsPage(state: PlayerUiState, extra: PlayExtraState) {
     val lines = remember(extra.lyric) {

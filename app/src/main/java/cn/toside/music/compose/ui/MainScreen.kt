@@ -3,25 +3,28 @@ package cn.toside.music.compose.ui
 import android.app.Activity
 import android.content.ContextWrapper
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,8 +39,11 @@ import androidx.navigation.compose.rememberNavController
 import cn.toside.music.compose.data.ThemeMode
 import cn.toside.music.compose.data.model.MusicInfo
 import cn.toside.music.compose.player.PlayerUiState
+import cn.toside.music.compose.ui.adaptive.LocalAdaptive
+import cn.toside.music.compose.ui.adaptive.ProvideAdaptive
 import cn.toside.music.compose.ui.component.AddToListDialog
 import cn.toside.music.compose.ui.component.MiniPlayer
+import cn.toside.music.compose.ui.component.lxFocusable
 import cn.toside.music.compose.ui.leaderboard.LeaderboardScreen
 import cn.toside.music.compose.ui.leaderboard.LeaderboardViewModel
 import cn.toside.music.compose.ui.mylist.MyListScreen
@@ -101,19 +107,22 @@ fun MainScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    LxMusicTheme(darkTheme = dark) {
-        MainScaffold(
-            navController = navController,
-            currentRoute = currentRoute,
-            searchViewModel = searchViewModel,
-            leaderboardViewModel = leaderboardViewModel,
-            songListViewModel = songListViewModel,
-            myListViewModel = myListViewModel,
-            playViewModel = playViewModel,
-            settingViewModel = settingViewModel,
-            playerState = playerState,
-            modifier = modifier,
-        )
+    // 注入设备形态（手机 / 平板 / TV），TV 端同时放大字号，供全应用读取
+    ProvideAdaptive {
+        LxMusicTheme(darkTheme = dark) {
+            MainScaffold(
+                navController = navController,
+                currentRoute = currentRoute,
+                searchViewModel = searchViewModel,
+                leaderboardViewModel = leaderboardViewModel,
+                songListViewModel = songListViewModel,
+                myListViewModel = myListViewModel,
+                playViewModel = playViewModel,
+                settingViewModel = settingViewModel,
+                playerState = playerState,
+                modifier = modifier,
+            )
+        }
     }
 }
 
@@ -138,8 +147,21 @@ private fun MainScaffold(
     val showChrome = currentRoute !in chromelessRoutes
     val selectedTabIndex = tabs.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
 
+    val adaptive = LocalAdaptive.current
+    // TV 遥控器落焦点起点：进入带导航栏的页面时把焦点放到当前 Tab
+    val navFocus = remember { FocusRequester() }
+    LaunchedEffect(currentRoute) {
+        if (adaptive.isTv) runCatching { navFocus.requestFocus() }
+    }
+
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            // TV 过扫描安全区：内容避开屏幕边缘
+            .then(
+                if (adaptive.isTv) Modifier.padding(horizontal = 32.dp, vertical = 20.dp)
+                else Modifier
+            ),
         topBar = {
             if (showChrome) {
                 // 避让系统状态栏（targetSdk 35 强制 edge-to-edge，需自行处理 insets）
@@ -148,8 +170,9 @@ private fun MainScaffold(
                     modifier = Modifier.statusBarsPadding(),
                 ) {
                     tabs.forEach { tab ->
+                        val selected = currentRoute == tab.route
                         Tab(
-                            selected = currentRoute == tab.route,
+                            selected = selected,
                             onClick = {
                                 navController.navigate(tab.route) {
                                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -158,6 +181,10 @@ private fun MainScaffold(
                                 }
                             },
                             text = { Text(tab.label) },
+                            modifier = Modifier.lxFocusable(
+                                focusRequester = if (selected) navFocus else null,
+                                shape = RoundedCornerShape(8.dp),
+                            ),
                         )
                     }
                 }
