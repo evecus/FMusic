@@ -1,21 +1,29 @@
 package cn.toside.music.compose.ui
 
+import android.app.Activity
+import android.content.ContextWrapper
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.runtime.collectAsState
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -79,6 +87,20 @@ fun MainScreen(modifier: Modifier = Modifier) {
         ThemeMode.DARK -> true
     }
 
+    // 系统状态栏/导航栏图标颜色跟随应用主题：浅色主题用深色图标，深色主题用浅色图标
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            var ctx = view.context
+            while (ctx is ContextWrapper && ctx !is Activity) ctx = ctx.baseContext
+            (ctx as? Activity)?.window?.let { window ->
+                val controller = WindowCompat.getInsetsController(window, view)
+                controller.isAppearanceLightStatusBars = !dark
+                controller.isAppearanceLightNavigationBars = !dark
+            }
+        }
+    }
+
     LxMusicTheme(darkTheme = dark) {
         MainScaffold(
             navController = navController,
@@ -120,7 +142,11 @@ private fun MainScaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
             if (showChrome) {
-                TabRow(selectedTabIndex = selectedTabIndex) {
+                // 避让系统状态栏（targetSdk 35 强制 edge-to-edge，需自行处理 insets）
+                TabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    modifier = Modifier.statusBarsPadding(),
+                ) {
                     tabs.forEach { tab ->
                         Tab(
                             selected = currentRoute == tab.route,
@@ -144,6 +170,8 @@ private fun MainScaffold(
                     onToggle = playViewModel::togglePlay,
                     // 播放页唯一入口：直接压栈，返回时回到原页面
                     onClick = { navController.navigate("play") { launchSingleTop = true } },
+                    // 避让系统导航栏（手势条）
+                    modifier = Modifier.navigationBarsPadding(),
                 )
             }
         },
@@ -151,7 +179,10 @@ private fun MainScaffold(
         NavHost(
             navController = navController,
             startDestination = "mylist",
-            modifier = Modifier.padding(padding),
+            modifier = Modifier
+                .padding(padding)
+                // 消费掉已应用的系统栏 insets，防止内页 TopAppBar 等再次叠加状态栏高度
+                .consumeWindowInsets(padding),
         ) {
             composable("search") {
                 val state by searchViewModel.uiState.collectAsState()
