@@ -231,6 +231,16 @@ class UserApiController(
             }.toString()
         )
 
+    /** 单曲 MV 信息补全（wy/kg，mobile listMvRefresh 同款），返回 { mv }（无 MV 时 mv 为空串） */
+    fun mvInfo(source: String, musicInfoJson: String): String =
+        builtinRuntime.call(
+            "mvInfo",
+            JSONObject().apply {
+                put("source", source)
+                put("musicInfo", JSONObject(musicInfoJson))
+            }.toString()
+        )
+
     // ── builtin → user 沙箱转发 ───────────────────────────────────
 
     private fun handleUserApiCall(

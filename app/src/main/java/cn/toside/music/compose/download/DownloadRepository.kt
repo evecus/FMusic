@@ -129,7 +129,8 @@ class DownloadRepository(
             setToast("该来源暂不支持下载MV")
             return
         }
-        val mvId = info.mv ?: run { setToast("该歌曲没有MV"); return }
+        val mvId = info.mv?.takeIf { it.isNotEmpty() && !(info.source == "wy" && it == "0") }
+            ?: run { setToast("该歌曲没有MV"); return }
         val fileName = filterFileName("${info.name} - ${info.singer}") + ".mp4"
         addTask(
             DownloadTask(

@@ -13651,6 +13651,22 @@ ${lrclist ? lrclist.map((l) => `[${l.time}]${l.text}
               }
               return { url: quality.downurl };
             });
+          },
+          // mobile listMvRefresh 同款：聚合接口不返回 mvhash，
+          // 用 v3/song/info 直接查单首歌（已实测返回 data.mvhash），空表示没有 MV
+          getMvInfo(musicInfo) {
+            const requestObj = httpFetch(
+              `http://mobilecdnbj.kugou.com/api/v3/song/info?hash=${musicInfo.hash}&version=9108&plat=0&area_code=1`,
+              {
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Linux; Android 11; SAMSUNG SM-G973U) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/14.2 Chrome/87.0.4280.141 Mobile Safari/537.36"
+                }
+              }
+            );
+            requestObj.promise = requestObj.promise.then(({ body }) => {
+              return (body && body.data && body.data.mvhash) || null;
+            });
+            return requestObj;
           }
         },
         getLyric(songInfo) {
@@ -16118,6 +16134,15 @@ ${result.lyric}`;
               return { url: body.data.url };
             });
           }
+        },
+        // mobile listMvRefresh 同款：重新拉取单曲详情补全 mv 字段（数值 id，0 表示没有 MV）
+        getMvInfo(musicInfo) {
+          const requestObj = musicInfo_default2(musicInfo.songmid);
+          requestObj.promise = requestObj.promise.then((info) => {
+            const mv = info.mv != null ? Number(info.mv) : 0;
+            return mv > 0 ? String(mv) : null;
+          });
+          return requestObj;
         },
         getLyric(songInfo) {
           return lyric_default4(songInfo.songmid);

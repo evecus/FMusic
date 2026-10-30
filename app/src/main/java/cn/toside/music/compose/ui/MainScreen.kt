@@ -302,6 +302,7 @@ private fun MainScaffold(
                         val state by myListViewModel.uiState.collectAsState()
                         MyListScreen(
                             state = state,
+                            onRefreshMv = myListViewModel::refreshMvInfo,
                             onSelectList = myListViewModel::selectList,
                             onCreateList = myListViewModel::createList,
                             onRenameList = myListViewModel::renameList,
@@ -464,6 +465,7 @@ private fun MainScaffold(
                         val state by myListViewModel.uiState.collectAsState()
                         MyListScreen(
                             state = state,
+                            onRefreshMv = myListViewModel::refreshMvInfo,
                             onSelectList = myListViewModel::selectList,
                             onCreateList = myListViewModel::createList,
                             onRenameList = myListViewModel::renameList,

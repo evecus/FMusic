@@ -398,6 +398,10 @@
         case 'mvUrl':
           promise = sdk[args.source].mv.getMvUrl(args.mvId).then((r) => ({ url: r.url }))
           break
+        case 'mvInfo':
+          // 补全歌单曲目缺失的 mv 字段（mobile listMvRefresh 同款）
+          promise = sdk[args.source].mv.getMvInfo(args.musicInfo).then((mv) => ({ mv }))
+          break
         case 'getBoards':
           promise = sdk[args.source].leaderboard.getBoards()
           break

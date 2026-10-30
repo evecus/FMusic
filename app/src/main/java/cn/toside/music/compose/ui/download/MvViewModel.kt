@@ -39,7 +39,7 @@ class MvViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         val mvId = info.mv
-        if (mvId.isNullOrEmpty()) {
+        if (mvId.isNullOrEmpty() || (info.source == "wy" && mvId == "0")) {
             toast("该歌曲没有MV")
             return
         }

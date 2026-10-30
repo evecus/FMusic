@@ -148,6 +148,23 @@ class MyListRepository(private val context: Context) {
         }
     }
 
+    /**
+     * 更新单首（按 uniqueKey 匹配后原位替换，位置不变）。
+     * 用于「重新导入」补全旧歌曲缺失的 mv 字段（mobile listMvRefresh 同款）。
+     */
+    suspend fun updateSong(listId: String, song: MusicInfo) {
+        mutex.withLock {
+            context.myListStore.edit { prefs ->
+                val existing = parseSongs(prefs[Keys.songs(listId)]).toMutableList()
+                val idx = existing.indexOfFirst { it.uniqueKey == song.uniqueKey }
+                if (idx >= 0) {
+                    existing[idx] = song
+                    prefs[Keys.songs(listId)] = songsToJson(existing)
+                }
+            }
+        }
+    }
+
     /** 清空歌单 */
     suspend fun clearList(listId: String) {
         mutex.withLock {

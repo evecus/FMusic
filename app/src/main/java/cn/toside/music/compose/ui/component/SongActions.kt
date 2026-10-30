@@ -28,9 +28,11 @@ class SongRowActions(
     val onDownloadMv: (MusicInfo) -> Unit = {},
     val onAddToList: (MusicInfo) -> Unit = {},
 ) {
-    /** 该歌曲是否有可用的 MV（mobile 同款判断：仅 wy/kg 且带 mv id） */
+    /** 该歌曲是否有可用的 MV（mobile 同款判断：仅 wy/kg 且带 mv id；wy 的 "0" 表示没有 MV） */
     fun hasMv(info: MusicInfo): Boolean =
-        (info.source == "wy" || info.source == "kg") && !info.mv.isNullOrEmpty()
+        (info.source == "wy" || info.source == "kg") &&
+            !info.mv.isNullOrEmpty() &&
+            !(info.source == "wy" && info.mv == "0")
 }
 
 /**

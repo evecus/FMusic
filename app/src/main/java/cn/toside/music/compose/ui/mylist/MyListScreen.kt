@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DropdownMenu
@@ -95,6 +96,7 @@ fun MyListScreen(
     onRemoveSong: (Int) -> Unit,
     onMoveSong: (Int, Int) -> Unit,
     onClearList: () -> Unit,
+    onRefreshMv: () -> Unit,
     onToastConsumed: () -> Unit,
     actions: cn.toside.music.compose.ui.component.SongRowActions,
     modifier: Modifier = Modifier,
@@ -109,6 +111,12 @@ fun MyListScreen(
     var showListSheet by remember { mutableStateOf(false) }
 
     val activeList = state.lists.firstOrNull { it.id == state.activeListId }
+
+    // 是否存在 mv 字段缺失的网易/酷狗歌曲（mobile listMvRefresh 同款判断）
+    val hasMvMissing = state.songs.any { song ->
+        (song.source == "wy" || song.source == "kg") &&
+            (song.mv.isNullOrEmpty() || (song.source == "wy" && song.mv == "0"))
+    }
 
     LaunchedEffect(state.toast) {
         state.toast?.let {
@@ -147,6 +155,7 @@ fun MyListScreen(
                     onOpenLists = null,
                     onPlayAll = onPlayAll,
                     onClearList = onClearList,
+                    onRefreshMv = if (hasMvMissing) onRefreshMv else null,
                     hasSongs = state.songs.isNotEmpty(),
                     adaptive = adaptive,
                 )
@@ -173,6 +182,7 @@ fun MyListScreen(
                     onOpenLists = { showListSheet = true },
                     onPlayAll = onPlayAll,
                     onClearList = onClearList,
+                    onRefreshMv = if (hasMvMissing) onRefreshMv else null,
                     hasSongs = state.songs.isNotEmpty(),
                     adaptive = adaptive,
                 )
@@ -276,7 +286,7 @@ fun MyListScreen(
     }
 }
 
-/** 标题行：当前歌单名 + 数量 + 播放全部 / 清空。手机端点击可弹出歌单选择。 */
+/** 标题行：当前歌单名 + 数量 + 重新导入MV / 播放全部 / 清空。手机端点击可弹出歌单选择。 */
 @Composable
 private fun MyListHeader(
     name: String,
@@ -284,6 +294,7 @@ private fun MyListHeader(
     onOpenLists: (() -> Unit)?,
     onPlayAll: () -> Unit,
     onClearList: () -> Unit,
+    onRefreshMv: (() -> Unit)?,
     hasSongs: Boolean,
     adaptive: AdaptiveInfo,
     modifier: Modifier = Modifier,
@@ -322,6 +333,13 @@ private fun MyListHeader(
             )
         }
         if (hasSongs) {
+            if (onRefreshMv != null) {
+                LxIconButton(
+                    onClick = onRefreshMv,
+                    imageVector = Icons.Default.Sync,
+                    contentDescription = "重新导入MV信息",
+                )
+            }
             LxIconButton(
                 onClick = onPlayAll,
                 imageVector = Icons.Default.PlayCircle,
