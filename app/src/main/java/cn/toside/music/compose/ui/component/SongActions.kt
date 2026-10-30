@@ -80,7 +80,7 @@ fun SongMoreButton(
 private fun SongMenuItem(icon: ImageVector, label: String, onClick: () -> Unit) {
     DropdownMenuItem(
         text = { Text(label) },
-        leadingContent = { Icon(icon, contentDescription = null) },
+        leadingIcon = { Icon(icon, contentDescription = null) },
         onClick = onClick,
     )
 }

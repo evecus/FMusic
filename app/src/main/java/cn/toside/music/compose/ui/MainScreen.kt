@@ -320,7 +320,6 @@ private fun MainScaffold(
                             navController = navController,
                             playViewModel = playViewModel,
                             onAddToList = { addToListTarget = it },
-                            actions = songActions,
                         )
                     }
                     composable("download") {
@@ -481,7 +480,6 @@ private fun MainScaffold(
                             navController = navController,
                             playViewModel = playViewModel,
                             onAddToList = { addToListTarget = it },
-                            actions = songActions,
                         )
                     }
                     composable("download") {

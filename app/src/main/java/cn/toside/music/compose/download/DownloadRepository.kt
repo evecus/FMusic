@@ -273,7 +273,7 @@ class DownloadRepository(
                     runCatching { downloadLyric(task) }
                 }
             } catch (e: Throwable) {
-                runCatching { context.contentResolver.delete(uri) }
+                runCatching { context.contentResolver.delete(uri, null, null) }
                 throw e
             }
         } else {
@@ -310,7 +310,7 @@ class DownloadRepository(
                 downloadToFile(task, url) { contentOut(uri) }
                 finishMediaStore(uri)
             } catch (e: Throwable) {
-                runCatching { context.contentResolver.delete(uri) }
+                runCatching { context.contentResolver.delete(uri, null, null) }
                 throw e
             }
         } else {

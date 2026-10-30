@@ -3,6 +3,7 @@ package cn.toside.music.compose.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -58,7 +59,7 @@ class SettingsRepository(private val context: Context) {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DISPLAY_MODE = stringPreferencesKey("display_mode")
         val DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
-        val DOWNLOAD_LYRIC = stringPreferencesKey("download_lyric")
+        val DOWNLOAD_LYRIC = booleanPreferencesKey("download_lyric")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
