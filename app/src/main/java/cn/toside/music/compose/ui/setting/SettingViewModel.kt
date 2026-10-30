@@ -196,6 +196,18 @@ class SettingViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settingsRepository.setDownloadLyric(enabled) }
     }
 
+    fun setWriteTags(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setWriteTags(enabled) }
+    }
+
+    fun setWriteCover(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setWriteCover(enabled) }
+    }
+
+    fun setWriteEmbeddedLyric(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setWriteEmbeddedLyric(enabled) }
+    }
+
     fun consumeMessage() {
         _uiState.value = _uiState.value.copy(message = null)
     }

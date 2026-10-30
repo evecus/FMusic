@@ -347,6 +347,9 @@ private fun MainScaffold(
                             onSetDisplayMode = settingViewModel::setDisplayMode,
                             onSetDownloadQuality = settingViewModel::setDownloadQuality,
                             onSetDownloadLyric = settingViewModel::setDownloadLyric,
+                            onSetWriteTags = settingViewModel::setWriteTags,
+                            onSetWriteCover = settingViewModel::setWriteCover,
+                            onSetWriteEmbeddedLyric = settingViewModel::setWriteEmbeddedLyric,
                             onConsumeMessage = settingViewModel::consumeMessage,
                         )
                     }
@@ -507,6 +510,9 @@ private fun MainScaffold(
                             onSetDisplayMode = settingViewModel::setDisplayMode,
                             onSetDownloadQuality = settingViewModel::setDownloadQuality,
                             onSetDownloadLyric = settingViewModel::setDownloadLyric,
+                            onSetWriteTags = settingViewModel::setWriteTags,
+                            onSetWriteCover = settingViewModel::setWriteCover,
+                            onSetWriteEmbeddedLyric = settingViewModel::setWriteEmbeddedLyric,
                             onConsumeMessage = settingViewModel::consumeMessage,
                         )
                     }

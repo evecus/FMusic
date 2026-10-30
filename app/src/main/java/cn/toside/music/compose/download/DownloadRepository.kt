@@ -23,6 +23,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -261,36 +264,130 @@ class DownloadRepository(
         val url = MusicUrl.parse(urlJson)?.url
             ?: throw IllegalStateException("获取下载地址失败")
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val uri = insertMediaStore(
-                task, MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
-                1, "Music/LX Music", audioMime(task.quality),
-            ) ?: throw IllegalStateException("创建下载文件失败")
-            try {
-                downloadToFile(task, url) { contentOut(uri) }
-                finishMediaStore(uri)
-                if (settingsRepository.settings.first().downloadLyric) {
-                    runCatching { downloadLyric(task) }
-                }
-            } catch (e: Throwable) {
-                runCatching { context.contentResolver.delete(uri, null, null) }
-                throw e
+        // 1. 先下载到缓存临时文件（临时文件保留真实扩展名，供标签库识别格式）
+        val tmp = File(context.cacheDir, task.fileName)
+        try {
+            downloadToFile(task, url) { tmp.outputStream() }
+
+            // 2. 写入标签 / 封面 / 内嵌歌词（失败不影响下载）
+            val settings = settingsRepository.settings.first()
+            if (settings.writeTags || settings.writeCover || settings.writeEmbeddedLyric) {
+                runCatching { writeAudioMetadata(tmp, task, settings) }
+                    .onFailure { android.util.Log.w("DownloadRepository", "写入标签失败", it) }
             }
-        } else {
-            val file = File(songDir, task.fileName)
-            try {
-                downloadToFile(task, url) { file.outputStream() }
-                if (settingsRepository.settings.first().downloadLyric) {
-                    runCatching { downloadLyric(task) }
+
+            // 3. 落盘到最终位置
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val uri = insertMediaStore(
+                    task, MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+                    1, "Music/LX Music", audioMime(task.quality),
+                ) ?: throw IllegalStateException("创建下载文件失败")
+                try {
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
+                        tmp.inputStream().use { it.copyTo(out) }
+                    } ?: throw IllegalStateException("无法写入文件")
+                    finishMediaStore(uri)
+                } catch (e: Throwable) {
+                    runCatching { context.contentResolver.delete(uri, null, null) }
+                    throw e
                 }
-            } catch (e: Throwable) {
-                runCatching { file.delete() }
-                throw e
+            } else {
+                val file = File(songDir, task.fileName)
+                tmp.copyTo(file, overwrite = true)
+                scanFile(file)
             }
-            scanFile(file)
+
+            // 4. 歌词文件
+            if (settings.downloadLyric) {
+                runCatching { downloadLyric(task) }
+            }
+        } finally {
+            runCatching { tmp.delete() }
         }
         update(task.id) { it.copy(status = DownloadStatus.COMPLETED, percent = 1f, speed = "") }
         setToast("${task.fileName} 下载完成!")
+    }
+
+    /**
+     * 用 jaudiotagger 把标题/歌手/专辑、封面、歌词写入音频文件。
+     * mp3（128k/320k）写 ID3v2，flac 写 Vorbis Comment + Picture，按扩展名自动识别。
+     */
+    private suspend fun writeAudioMetadata(
+        file: File,
+        task: DownloadTask,
+        settings: cn.toside.music.compose.data.AppSettings,
+    ) = withContext(Dispatchers.IO) {
+        val info = MusicInfo.parse(
+            kotlinx.serialization.json.Json.parseToJsonElement(task.musicInfoJson).jsonObject,
+            task.source,
+        ) ?: return@withContext
+        val audio = org.jaudiotagger.audio.AudioFileIO.read(file)
+        val tag = audio.tag ?: audio.createDefaultTag()
+
+        if (settings.writeTags) {
+            tag.setField(org.jaudiotagger.tag.FieldKey.TITLE, info.name)
+            tag.setField(org.jaudiotagger.tag.FieldKey.ARTIST, info.singer.ifEmpty { "未知歌手" })
+            info.albumName?.takeIf { it.isNotEmpty() }?.let {
+                tag.setField(org.jaudiotagger.tag.FieldKey.ALBUM, it)
+            }
+        }
+
+        if (settings.writeCover) {
+            val coverUrl = runCatching {
+                val json = jsController.pic(info.source, info.toJson())
+                val el = kotlinx.serialization.json.Json.parseToJsonElement(json)
+                when (el) {
+                    is kotlinx.serialization.json.JsonPrimitive -> el.contentOrNull
+                    is kotlinx.serialization.json.JsonObject ->
+                        el["url"]?.jsonPrimitive?.contentOrNull
+                    else -> null
+                }
+            }.getOrNull() ?: info.img
+            val coverBytes = coverUrl?.let { fetchBytes(it) }
+            if (coverBytes != null && coverBytes.size > 4) {
+                val mime = detectImageMime(coverBytes) ?: "image/jpeg"
+                val ext = if (mime == "image/png") "png" else "jpg"
+                val coverFile = File(context.cacheDir, "cover_tmp.$ext")
+                try {
+                    coverFile.writeBytes(coverBytes)
+                    val artwork = org.jaudiotagger.tag.images.ArtworkFactory.createArtworkFromFile(coverFile)
+                    artwork.mimeType = mime
+                    tag.setField(artwork)
+                } finally {
+                    runCatching { coverFile.delete() }
+                }
+            }
+        }
+
+        if (settings.writeEmbeddedLyric) {
+            val lyric = runCatching {
+                cn.toside.music.compose.data.model.LyricInfo.parse(
+                    jsController.lyric(info.source, info.toJson())
+                )?.lyric
+            }.getOrNull()
+            if (!lyric.isNullOrEmpty()) {
+                tag.setField(org.jaudiotagger.tag.FieldKey.LYRICS, lyric)
+            }
+        }
+
+        audio.tag = tag
+        org.jaudiotagger.audio.AudioFileIO.write(audio)
+    }
+
+    /** 下载封面等小文件，复用 OkHttp */
+    private fun fetchBytes(url: String): ByteArray? = runCatching {
+        http.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+            if (!resp.isSuccessful) null else resp.body?.bytes()
+        }
+    }.getOrNull()
+
+    /** 按文件魔数判断图片类型 */
+    private fun detectImageMime(b: ByteArray): String? = when {
+        b.size >= 3 && b[0] == 0xFF.toByte() && b[1] == 0xD8.toByte() -> "image/jpeg"
+        b.size >= 4 && b[0] == 0x89.toByte() && b[1] == 0x50.toByte() &&
+            b[2] == 0x4E.toByte() && b[3] == 0x47.toByte() -> "image/png"
+        b.size >= 3 && b[0] == 0x47.toByte() && b[1] == 0x49.toByte() && b[2] == 0x46.toByte() -> "image/gif"
+        else -> null
     }
 
     // ── MV 下载 ──────────────────────────────────────────────────

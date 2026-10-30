@@ -44,6 +44,9 @@ data class AppSettings(
     val searchSources: Set<String> = setOf(Sources.KW, Sources.KG, Sources.TX, Sources.WY, Sources.MG),
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val displayMode: DisplayMode = DisplayMode.AUTO,
+    val writeTags: Boolean = true,
+    val writeCover: Boolean = true,
+    val writeEmbeddedLyric: Boolean = true,
     /** 下载默认音质（下载弹窗预选） */
     val downloadQuality: String = Qualitys.Q128,
     /** 下载歌曲时同时保存 .lrc 歌词文件 */
@@ -60,6 +63,9 @@ class SettingsRepository(private val context: Context) {
         val DISPLAY_MODE = stringPreferencesKey("display_mode")
         val DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
         val DOWNLOAD_LYRIC = booleanPreferencesKey("download_lyric")
+        val WRITE_TAGS = booleanPreferencesKey("write_tags")
+        val WRITE_COVER = booleanPreferencesKey("write_cover")
+        val WRITE_EMBEDDED_LYRIC = booleanPreferencesKey("write_embedded_lyric")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -72,7 +78,10 @@ class SettingsRepository(private val context: Context) {
             }.getOrDefault(ThemeMode.SYSTEM),
             displayMode = DisplayMode.fromKey(prefs[Keys.DISPLAY_MODE]),
             downloadQuality = prefs[Keys.DOWNLOAD_QUALITY] ?: Qualitys.Q128,
-            downloadLyric = prefs[Keys.DOWNLOAD_LYRIC] ?: true,
+            downloadLyric = prefs[Keys.DOWNLOAD_LYRIC] ?: false,
+            writeTags = prefs[Keys.WRITE_TAGS] ?: true,
+            writeCover = prefs[Keys.WRITE_COVER] ?: true,
+            writeEmbeddedLyric = prefs[Keys.WRITE_EMBEDDED_LYRIC] ?: true,
         )
     }
 
@@ -102,5 +111,17 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setDownloadLyric(enabled: Boolean) {
         context.dataStore.edit { it[Keys.DOWNLOAD_LYRIC] = enabled }
+    }
+
+    suspend fun setWriteTags(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.WRITE_TAGS] = enabled }
+    }
+
+    suspend fun setWriteCover(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.WRITE_COVER] = enabled }
+    }
+
+    suspend fun setWriteEmbeddedLyric(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.WRITE_EMBEDDED_LYRIC] = enabled }
     }
 }

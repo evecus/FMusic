@@ -21,3 +21,8 @@
 
 -dontwarn java.lang.invoke.**
 -dontwarn org.slf4j.**
+
+# jaudiotagger（音频标签写入，反射 + java.awt 可选路径）
+-dontwarn org.jaudiotagger.**
+-dontwarn java.awt.**
+-dontwarn javax.imageio.**

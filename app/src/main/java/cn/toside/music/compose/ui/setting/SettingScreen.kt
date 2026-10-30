@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -77,6 +78,9 @@ fun SettingScreen(
     onSetDisplayMode: (DisplayMode) -> Unit,
     onSetDownloadQuality: (String) -> Unit,
     onSetDownloadLyric: (Boolean) -> Unit,
+    onSetWriteTags: (Boolean) -> Unit,
+    onSetWriteCover: (Boolean) -> Unit,
+    onSetWriteEmbeddedLyric: (Boolean) -> Unit,
     onConsumeMessage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -295,24 +299,32 @@ fun SettingScreen(
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("同时下载歌词", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "下载完成后保存同名 .lrc 歌词文件",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = state.settings.downloadLyric,
-                        onCheckedChange = { onSetDownloadLyric(it) },
-                        modifier = Modifier.lxFocusable(),
-                    )
-                }
+                Text("附加选项", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(4.dp))
+                SwitchOption(
+                    title = "写入标签",
+                    subtitle = "写入歌名、歌手、专辑信息",
+                    checked = state.settings.writeTags,
+                    onChange = onSetWriteTags,
+                )
+                SwitchOption(
+                    title = "下载歌词文件",
+                    subtitle = "下载完成后保存同名 .lrc 歌词文件",
+                    checked = state.settings.downloadLyric,
+                    onChange = onSetDownloadLyric,
+                )
+                SwitchOption(
+                    title = "写入内嵌歌词",
+                    subtitle = "歌词写入音频文件，播放器可直接显示",
+                    checked = state.settings.writeEmbeddedLyric,
+                    onChange = onSetWriteEmbeddedLyric,
+                )
+                SwitchOption(
+                    title = "写入封面",
+                    subtitle = "封面图写入音频文件",
+                    checked = state.settings.writeCover,
+                    onChange = onSetWriteCover,
+                )
 
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
 
@@ -475,4 +487,33 @@ private fun shortUrl(url: String): String {
     if (s.startsWith("https://", true)) s = s.removePrefix("https://")
     else if (s.startsWith("http://", true)) s = s.removePrefix("http://")
     return if (s.length > 42) s.take(40) + "…" else s
+}
+
+@Composable
+private fun SwitchOption(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            modifier = Modifier.lxFocusable(),
+        )
+    }
 }
