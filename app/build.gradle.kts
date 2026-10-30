@@ -2,7 +2,6 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -15,16 +14,12 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
-    }
-    
-    signingConfigs {
-        create("release") {
-            val envStore = System.getenv("RELEASE_STORE_FILE")
-            if (envStore != null && file(envStore).exists()) {
-                storeFile = file(envStore)
-                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
-                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
-                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+
+        // CI 传 -PonlyArm64 时只出 arm64（release 发布形态）；
+        // 本地构建不带该参数，保留 v7a / x86_64 以便模拟器调试
+        if (project.hasProperty("onlyArm64")) {
+            ndk {
+                abiFilters += "arm64-v8a"
             }
         }
     }
@@ -42,22 +37,6 @@ android {
         }
         debug {
             isMinifyEnabled = false
-        }
-    }
-
-    // 按 ABI 拆分 APK。默认多架构；CI 传 -PonlyArm64 只编 arm64-v8a
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            if (project.hasProperty("onlyArm64")) {
-                include("arm64-v8a")
-            } else if (project.hasProperty("onlyArm-v7a")) {
-                include("armeabi-v7a")
-            } else {
-                include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-            }
-            isUniversalApk = false
         }
     }
 

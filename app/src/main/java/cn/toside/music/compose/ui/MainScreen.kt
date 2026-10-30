@@ -170,6 +170,8 @@ fun MainScreen(modifier: Modifier = Modifier) {
                 myListViewModel = myListViewModel,
                 playViewModel = playViewModel,
                 settingViewModel = settingViewModel,
+                downloadViewModel = downloadViewModel,
+                mvViewModel = mvViewModel,
                 playerState = playerState,
                 modifier = modifier,
             )
@@ -193,6 +195,8 @@ private fun MainScaffold(
     myListViewModel: MyListViewModel,
     playViewModel: PlayViewModel,
     settingViewModel: SettingViewModel,
+    downloadViewModel: DownloadViewModel,
+    mvViewModel: MvViewModel,
     playerState: PlayerUiState,
     modifier: Modifier = Modifier,
 ) {
@@ -308,6 +312,7 @@ private fun MainScaffold(
                             onMoveSong = myListViewModel::moveSongAt,
                             onClearList = myListViewModel::clearActiveList,
                             onToastConsumed = myListViewModel::consumeToast,
+                            actions = songActions,
                         )
                     }
                     composable("play") {
@@ -467,6 +472,7 @@ private fun MainScaffold(
                             onMoveSong = myListViewModel::moveSongAt,
                             onClearList = myListViewModel::clearActiveList,
                             onToastConsumed = myListViewModel::consumeToast,
+                            actions = songActions,
                         )
                     }
                     composable("play") {

@@ -96,6 +96,7 @@ fun MyListScreen(
     onMoveSong: (Int, Int) -> Unit,
     onClearList: () -> Unit,
     onToastConsumed: () -> Unit,
+    actions: cn.toside.music.compose.ui.component.SongRowActions,
     modifier: Modifier = Modifier,
 ) {
     val adaptive = LocalAdaptive.current
@@ -343,7 +344,6 @@ private fun MyListSongList(
     onPlay: (Int) -> Unit,
     onRemoveSong: (Int) -> Unit,
     onMoveSong: (Int, Int) -> Unit,
-    actions: cn.toside.music.compose.ui.component.SongRowActions,
     actions: cn.toside.music.compose.ui.component.SongRowActions,
     modifier: Modifier = Modifier,
 ) {
