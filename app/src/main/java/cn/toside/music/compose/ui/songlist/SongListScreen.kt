@@ -87,6 +87,7 @@ fun SongListScreen(
     onLoadMoreLists: () -> Unit,
     onLoadMoreDetail: () -> Unit,
     onAddToList: (cn.toside.music.compose.data.model.MusicInfo) -> Unit,
+    actions: cn.toside.music.compose.ui.component.SongRowActions,
     modifier: Modifier = Modifier,
 ) {
     val detail = state.detail
@@ -96,7 +97,7 @@ fun SongListScreen(
             detail = detail,
             onBack = onCloseDetail,
             onPlay = onPlay,
-            onAddToList = onAddToList,
+            actions = actions,
             onLoadMore = onLoadMoreDetail,
             modifier = modifier,
         )
@@ -614,7 +615,7 @@ private fun SongListDetailContent(
     onBack: () -> Unit,
     onPlay: (Int) -> Unit,
     onLoadMore: () -> Unit,
-    onAddToList: (cn.toside.music.compose.data.model.MusicInfo) -> Unit,
+    actions: cn.toside.music.compose.ui.component.SongRowActions,
     modifier: Modifier = Modifier,
 ) {
     val adaptive = LocalAdaptive.current
@@ -696,7 +697,7 @@ private fun SongListDetailContent(
                         detail = detail,
                         listState = listState,
                         onPlay = onPlay,
-                        onAddToList = onAddToList,
+                        actions = actions,
                         showHeader = false,
                         modifier = Modifier
                             .weight(1f)
@@ -741,7 +742,7 @@ private fun SongListDetailContent(
                 detail = detail,
                 listState = listState,
                 onPlay = onPlay,
-                onAddToList = onAddToList,
+                actions = actions,
                 showHeader = true,
                 modifier = Modifier
                     .weight(1f)
@@ -758,7 +759,7 @@ private fun SongListDetailBody(
     detail: SongListDetailState,
     listState: LazyListState,
     onPlay: (Int) -> Unit,
-    onAddToList: (cn.toside.music.compose.data.model.MusicInfo) -> Unit,
+    actions: cn.toside.music.compose.ui.component.SongRowActions,
     showHeader: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -822,7 +823,7 @@ private fun SongListDetailBody(
                         index = index + 1,
                         info = info,
                         onClick = { onPlay(index) },
-                        onAddToList = { onAddToList(info) },
+                        actions = actions,
                     )
                 }
                 if (detail.loadingMore) {
@@ -861,7 +862,7 @@ private fun SongRow(
     index: Int,
     info: cn.toside.music.compose.data.model.MusicInfo,
     onClick: () -> Unit,
-    onAddToList: () -> Unit,
+    actions: cn.toside.music.compose.ui.component.SongRowActions,
 ) {
     val adaptive = LocalAdaptive.current
     androidx.compose.material3.ListItem(
@@ -890,11 +891,7 @@ private fun SongRow(
                     label = { Text(Sources.label(info.source)) },
                     modifier = Modifier.lxFocusable(),
                 )
-                LxIconButton(
-                    onClick = onAddToList,
-                    imageVector = Icons.Default.PlaylistAdd,
-                    contentDescription = "收藏到歌单",
-                )
+                cn.toside.music.compose.ui.component.SongMoreButton(info = info, actions = actions)
             }
         },
         modifier = Modifier

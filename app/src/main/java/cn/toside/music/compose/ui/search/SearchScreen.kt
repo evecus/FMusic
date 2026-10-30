@@ -59,6 +59,7 @@ fun SearchScreen(
     onPlay: (Int) -> Unit,
     onLoadMore: () -> Unit,
     onAddToList: (MusicInfo) -> Unit,
+    actions: cn.toside.music.compose.ui.component.SongRowActions,
     modifier: Modifier = Modifier,
 ) {
     val adaptive = LocalAdaptive.current
@@ -137,7 +138,7 @@ fun SearchScreen(
                         MusicRow(
                             info = info,
                             onClick = { onPlay(state.results.indexOf(info)) },
-                            onAddToList = { onAddToList(info) },
+                            actions = actions,
                         )
                     }
                     if (state.loadingMore) {
@@ -253,7 +254,11 @@ private fun TvKey(
 }
 
 @Composable
-private fun MusicRow(info: MusicInfo, onClick: () -> Unit, onAddToList: () -> Unit) {
+private fun MusicRow(
+    info: MusicInfo,
+    onClick: () -> Unit,
+    actions: cn.toside.music.compose.ui.component.SongRowActions,
+) {
     androidx.compose.material3.ListItem(
         headlineContent = { Text(info.name, maxLines = 1) },
         supportingContent = {
@@ -269,10 +274,9 @@ private fun MusicRow(info: MusicInfo, onClick: () -> Unit, onAddToList: () -> Un
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AssistChip(onClick = {}, label = { Text(Sources.label(info.source)) })
-                LxIconButton(
-                    onClick = onAddToList,
-                    imageVector = Icons.Default.PlaylistAdd,
-                    contentDescription = "收藏到歌单",
+                cn.toside.music.compose.ui.component.SongMoreButton(
+                    info = info,
+                    actions = actions,
                 )
             }
         },

@@ -43,6 +43,10 @@ data class AppSettings(
     val searchSources: Set<String> = setOf(Sources.KW, Sources.KG, Sources.TX, Sources.WY, Sources.MG),
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val displayMode: DisplayMode = DisplayMode.AUTO,
+    /** 下载默认音质（下载弹窗预选） */
+    val downloadQuality: String = Qualitys.Q128,
+    /** 下载歌曲时同时保存 .lrc 歌词文件 */
+    val downloadLyric: Boolean = true,
 )
 
 class SettingsRepository(private val context: Context) {
@@ -53,6 +57,8 @@ class SettingsRepository(private val context: Context) {
         val SEARCH_SOURCES = stringSetPreferencesKey("search_sources")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DISPLAY_MODE = stringPreferencesKey("display_mode")
+        val DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
+        val DOWNLOAD_LYRIC = stringPreferencesKey("download_lyric")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -64,6 +70,8 @@ class SettingsRepository(private val context: Context) {
                 ThemeMode.valueOf(prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM.name)
             }.getOrDefault(ThemeMode.SYSTEM),
             displayMode = DisplayMode.fromKey(prefs[Keys.DISPLAY_MODE]),
+            downloadQuality = prefs[Keys.DOWNLOAD_QUALITY] ?: Qualitys.Q128,
+            downloadLyric = prefs[Keys.DOWNLOAD_LYRIC] ?: true,
         )
     }
 
@@ -85,5 +93,13 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setDisplayMode(mode: DisplayMode) {
         context.dataStore.edit { it[Keys.DISPLAY_MODE] = mode.key }
+    }
+
+    suspend fun setDownloadQuality(quality: String) {
+        context.dataStore.edit { it[Keys.DOWNLOAD_QUALITY] = quality }
+    }
+
+    suspend fun setDownloadLyric(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.DOWNLOAD_LYRIC] = enabled }
     }
 }

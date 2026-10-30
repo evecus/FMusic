@@ -24,6 +24,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.VideoFile
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
@@ -152,6 +155,7 @@ fun MyListScreen(
                     onPlay = onPlay,
                     onRemoveSong = onRemoveSong,
                     onMoveSong = onMoveSong,
+                    actions = actions,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
@@ -177,6 +181,7 @@ fun MyListScreen(
                     onPlay = onPlay,
                     onRemoveSong = onRemoveSong,
                     onMoveSong = onMoveSong,
+                    actions = actions,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
@@ -338,6 +343,8 @@ private fun MyListSongList(
     onPlay: (Int) -> Unit,
     onRemoveSong: (Int) -> Unit,
     onMoveSong: (Int, Int) -> Unit,
+    actions: cn.toside.music.compose.ui.component.SongRowActions,
+    actions: cn.toside.music.compose.ui.component.SongRowActions,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -365,6 +372,7 @@ private fun MyListSongList(
                         onRemove = { onRemoveSong(index) },
                         onMoveUp = { onMoveSong(index, -1) },
                         onMoveDown = { onMoveSong(index, +1) },
+                        actions = actions,
                     )
                 }
             }
@@ -382,6 +390,7 @@ private fun MyListSongRow(
     onRemove: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
+    actions: cn.toside.music.compose.ui.component.SongRowActions,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     ListItem(
@@ -417,6 +426,35 @@ private fun MyListSongRow(
                         contentDescription = "歌曲菜单",
                     )
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text("下载歌曲") },
+                            leadingIcon = { Icon(Icons.Default.Download, contentDescription = null) },
+                            onClick = {
+                                menuOpen = false
+                                actions.onDownload(info)
+                            },
+                            modifier = Modifier.lxFocusable(),
+                        )
+                        if (actions.hasMv(info)) {
+                            DropdownMenuItem(
+                                text = { Text("播放MV") },
+                                leadingIcon = { Icon(Icons.Default.Movie, contentDescription = null) },
+                                onClick = {
+                                    menuOpen = false
+                                    actions.onPlayMv(info)
+                                },
+                                modifier = Modifier.lxFocusable(),
+                            )
+                            DropdownMenuItem(
+                                text = { Text("下载MV") },
+                                leadingIcon = { Icon(Icons.Default.VideoFile, contentDescription = null) },
+                                onClick = {
+                                    menuOpen = false
+                                    actions.onDownloadMv(info)
+                                },
+                                modifier = Modifier.lxFocusable(),
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text("上移") },
                             leadingIcon = { Icon(Icons.Default.ArrowUpward, contentDescription = null) },

@@ -221,6 +221,16 @@ class UserApiController(
             }.toString()
         )
 
+    /** MV 播放直链（wy/kg 内置直连，不依赖用户脚本），返回 { url } */
+    fun mvUrl(source: String, mvId: String): String =
+        builtinRuntime.call(
+            "mvUrl",
+            JSONObject().apply {
+                put("source", source)
+                put("mvId", mvId)
+            }.toString()
+        )
+
     // ── builtin → user 沙箱转发 ───────────────────────────────────
 
     private fun handleUserApiCall(

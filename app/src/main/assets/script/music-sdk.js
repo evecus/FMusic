@@ -13178,7 +13178,8 @@ ${lrclist ? lrclist.map((l) => `[${l.time}]${l.text}
             hash: rawData.FileHash,
             types,
             _types,
-            typeUrl: {}
+            typeUrl: {},
+            mv: rawData.MvHash || null
           };
         },
         handleResult(rawData) {
@@ -13588,6 +13589,32 @@ ${lrclist ? lrclist.map((l) => `[${l.time}]${l.text}
         comment: comment_default2,
         getMusicUrl(songInfo, type) {
           return apis("kg").getMusicUrl(songInfo, type);
+        },
+        mv: {
+          getMvUrl(mvHash, retryNum) {
+            if (retryNum == null) retryNum = 0;
+            if (retryNum > 2) return Promise.reject(new Error("try max num"));
+            const requestObj = httpFetch(
+              `http://m.kugou.com/app/i/mv.php?cmd=100&hash=${mvHash}&ismp3=1&ext=mp4`,
+              {
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Linux; Android 11; SAMSUNG SM-G973U) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/14.2 Chrome/87.0.4280.141 Mobile Safari/537.36"
+                }
+              }
+            );
+            return requestObj.promise.then(({ body, statusCode }) => {
+              if (statusCode !== 200 || !body || !body.mvdata) {
+                return kg.mv.getMvUrl(mvHash, retryNum + 1);
+              }
+              // 画质优先级：超清(sq) > 标清(le) > 流畅(rq)
+              const mvdata = body.mvdata;
+              const quality = mvdata.sq || mvdata.le || mvdata.rq || null;
+              if (!quality || !quality.downurl) {
+                return Promise.reject(new Error("获取MV链接失败"));
+              }
+              return { url: quality.downurl };
+            });
+          }
         },
         getLyric(songInfo) {
           return lyric_default2.getLyric(songInfo);
@@ -15409,6 +15436,7 @@ ${result.lyric}`;
               source: "wy",
               interval: formatPlayTime(item.dt / 1e3),
               songmid: item.id,
+              mv: item.mv != null ? String(item.mv) : null,
               img: item.al.picUrl,
               lrc: null,
               types,
@@ -16020,6 +16048,35 @@ ${result.lyric}`;
         comment: comment_default4,
         getMusicUrl(songInfo, type) {
           return apis("wy").getMusicUrl(songInfo, type);
+        },
+        mv: {
+          getMvUrl(mvId, retryNum) {
+            if (retryNum == null) retryNum = 0;
+            if (retryNum > 2) return Promise.reject(new Error("try max num"));
+            const requestObj = httpFetch(
+              "https://music.163.com/weapi/song/enhance/play/mv/url",
+              {
+                method: "post",
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36",
+                  origin: "https://music.163.com"
+                },
+                form: weapi({
+                  id: mvId,
+                  r: 1080
+                })
+              }
+            );
+            return requestObj.promise.then(({ body, statusCode }) => {
+              if (statusCode !== 200 || body.code !== 200) {
+                return Promise.reject(new Error("获取MV链接失败"));
+              }
+              if (!body.data.url) {
+                return Promise.reject(new Error(body.data.msg || "获取MV链接失败"));
+              }
+              return { url: body.data.url };
+            });
+          }
         },
         getLyric(songInfo) {
           return lyric_default4(songInfo.songmid);

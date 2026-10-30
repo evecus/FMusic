@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.Pause
@@ -74,7 +75,14 @@ import cn.toside.music.compose.ui.adaptive.LocalAdaptive
 import cn.toside.music.compose.ui.adaptive.ProvideAdaptive
 import cn.toside.music.compose.ui.component.AddToListDialog
 import cn.toside.music.compose.ui.component.MiniPlayer
+import cn.toside.music.compose.ui.component.MvLoadingDialog
+import cn.toside.music.compose.ui.component.MvPlayerDialog
+import cn.toside.music.compose.ui.component.SongRowActions
 import cn.toside.music.compose.ui.component.lxFocusable
+import cn.toside.music.compose.ui.download.DownloadScreen
+import cn.toside.music.compose.ui.download.DownloadViewModel
+import cn.toside.music.compose.ui.download.DownloadQualityDialog
+import cn.toside.music.compose.ui.download.MvViewModel
 import cn.toside.music.compose.ui.leaderboard.LeaderboardScreen
 import cn.toside.music.compose.ui.leaderboard.LeaderboardViewModel
 import cn.toside.music.compose.ui.mylist.MyListScreen
@@ -97,6 +105,7 @@ private val tabs = listOf(
     NavTab("search", "搜索", Icons.Default.Search),
     NavTab("leaderboard", "排行", Icons.Default.FormatListNumbered),
     NavTab("songlist", "歌单", Icons.AutoMirrored.Filled.QueueMusic),
+    NavTab("download", "下载", Icons.Default.Download),
     NavTab("setting", "设置", Icons.Default.Settings),
 )
 
@@ -118,6 +127,8 @@ fun MainScreen(modifier: Modifier = Modifier) {
     val myListViewModel: MyListViewModel = viewModel(factory = MyListViewModel.Factory)
     val playViewModel: PlayViewModel = viewModel(factory = PlayViewModel.Factory)
     val settingViewModel: SettingViewModel = viewModel(factory = SettingViewModel.Factory)
+    val downloadViewModel: DownloadViewModel = viewModel(factory = DownloadViewModel.Factory)
+    val mvViewModel: MvViewModel = viewModel(factory = MvViewModel.Factory)
 
     val playerState by playViewModel.playerRepository.uiState.collectAsStateWithLifecycle()
     val settingState by settingViewModel.uiState.collectAsState()
@@ -189,6 +200,20 @@ private fun MainScaffold(
     var addToListTarget by remember { mutableStateOf<MusicInfo?>(null) }
     val myListsState by myListViewModel.uiState.collectAsState()
 
+    // 下载 / MV
+    val downloadTasks by downloadViewModel.tasks.collectAsStateWithLifecycle()
+    val mvState by mvViewModel.uiState.collectAsState()
+    val settingUiState by settingViewModel.uiState.collectAsState()
+    var downloadTarget by remember { mutableStateOf<MusicInfo?>(null) }
+    val songActions = remember {
+        SongRowActions(
+            onDownload = { downloadTarget = it },
+            onPlayMv = { mvViewModel.load(it) },
+            onDownloadMv = { downloadViewModel.addMvTask(it) },
+            onAddToList = { addToListTarget = it },
+        )
+    }
+
     val adaptive = LocalAdaptive.current
     // 播放页为独立全屏页面：不显示导航与迷你播放条
     val showChrome = currentRoute !in chromelessRoutes
@@ -238,6 +263,7 @@ private fun MainScaffold(
                             onPlay = searchViewModel::playAll,
                             onLoadMore = searchViewModel::loadMore,
                             onAddToList = { addToListTarget = it },
+                            actions = songActions,
                         )
                     }
                     composable("leaderboard") {
@@ -249,6 +275,7 @@ private fun MainScaffold(
                             onPlay = leaderboardViewModel::playAt,
                             onLoadMore = leaderboardViewModel::loadMore,
                             onAddToList = { addToListTarget = it },
+                            actions = songActions,
                         )
                     }
                     composable("songlist") {
@@ -264,6 +291,7 @@ private fun MainScaffold(
                             onLoadMoreLists = songListViewModel::loadMoreLists,
                             onLoadMoreDetail = songListViewModel::loadMoreDetail,
                             onAddToList = { addToListTarget = it },
+                            actions = songActions,
                         )
                     }
                     composable("mylist") {
@@ -287,6 +315,17 @@ private fun MainScaffold(
                             navController = navController,
                             playViewModel = playViewModel,
                             onAddToList = { addToListTarget = it },
+                            actions = songActions,
+                        )
+                    }
+                    composable("download") {
+                        DownloadScreen(
+                            tasks = downloadTasks,
+                            onPause = downloadViewModel::pause,
+                            onResume = downloadViewModel::resume,
+                            onRetry = downloadViewModel::retry,
+                            onRemove = downloadViewModel::remove,
+                            onClearCompleted = downloadViewModel::clearCompleted,
                         )
                     }
                     composable("setting") {
@@ -302,6 +341,8 @@ private fun MainScaffold(
                             onToggleSearchSource = settingViewModel::toggleSearchSource,
                             onSetThemeMode = settingViewModel::setThemeMode,
                             onSetDisplayMode = settingViewModel::setDisplayMode,
+                            onSetDownloadQuality = settingViewModel::setDownloadQuality,
+                            onSetDownloadLyric = settingViewModel::setDownloadLyric,
                             onConsumeMessage = settingViewModel::consumeMessage,
                         )
                     }
@@ -381,6 +422,7 @@ private fun MainScaffold(
                             onPlay = searchViewModel::playAll,
                             onLoadMore = searchViewModel::loadMore,
                             onAddToList = { addToListTarget = it },
+                            actions = songActions,
                         )
                     }
                     composable("leaderboard") {
@@ -392,6 +434,7 @@ private fun MainScaffold(
                             onPlay = leaderboardViewModel::playAt,
                             onLoadMore = leaderboardViewModel::loadMore,
                             onAddToList = { addToListTarget = it },
+                            actions = songActions,
                         )
                     }
                     composable("songlist") {
@@ -407,6 +450,7 @@ private fun MainScaffold(
                             onLoadMoreLists = songListViewModel::loadMoreLists,
                             onLoadMoreDetail = songListViewModel::loadMoreDetail,
                             onAddToList = { addToListTarget = it },
+                            actions = songActions,
                         )
                     }
                     composable("mylist") {
@@ -431,6 +475,17 @@ private fun MainScaffold(
                             navController = navController,
                             playViewModel = playViewModel,
                             onAddToList = { addToListTarget = it },
+                            actions = songActions,
+                        )
+                    }
+                    composable("download") {
+                        DownloadScreen(
+                            tasks = downloadTasks,
+                            onPause = downloadViewModel::pause,
+                            onResume = downloadViewModel::resume,
+                            onRetry = downloadViewModel::retry,
+                            onRemove = downloadViewModel::remove,
+                            onClearCompleted = downloadViewModel::clearCompleted,
                         )
                     }
                     composable("setting") {
@@ -446,6 +501,8 @@ private fun MainScaffold(
                             onToggleSearchSource = settingViewModel::toggleSearchSource,
                             onSetThemeMode = settingViewModel::setThemeMode,
                             onSetDisplayMode = settingViewModel::setDisplayMode,
+                            onSetDownloadQuality = settingViewModel::setDownloadQuality,
+                            onSetDownloadLyric = settingViewModel::setDownloadLyric,
                             onConsumeMessage = settingViewModel::consumeMessage,
                         )
                     }
@@ -466,6 +523,31 @@ private fun MainScaffold(
             }
         }
         }
+    }
+
+    // 下载音质选择弹窗
+    downloadTarget?.let { info ->
+        DownloadQualityDialog(
+            info = info,
+            defaultQuality = settingUiState.settings.downloadQuality,
+            onDismiss = { downloadTarget = null },
+            onConfirm = { quality ->
+                downloadViewModel.addSongTask(info, quality)
+                downloadTarget = null
+            },
+        )
+    }
+
+    // MV：取链接中 / 全屏播放
+    if (mvState.loading) {
+        MvLoadingDialog("正在获取MV链接…")
+    }
+    mvState.url?.let { url ->
+        MvPlayerDialog(
+            url = url,
+            title = mvState.title,
+            onDismiss = { mvViewModel.dismiss() },
+        )
     }
 
     // “收藏到歌单”弹窗（选择目标歌单即收藏）

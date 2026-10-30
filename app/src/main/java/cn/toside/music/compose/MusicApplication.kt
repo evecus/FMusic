@@ -29,6 +29,10 @@ class MusicGraph(private val app: Application) {
         PlayerRepository(app, jsController, settingsRepository)
     }
 
+    val downloadRepository: cn.toside.music.compose.download.DownloadRepository by lazy {
+        cn.toside.music.compose.download.DownloadRepository(app, jsController, settingsRepository)
+    }
+
     /** JS 引擎启动较慢（evaluate 650KB IIFE），放后台线程 */
     fun startJsEngine() {
         Thread({

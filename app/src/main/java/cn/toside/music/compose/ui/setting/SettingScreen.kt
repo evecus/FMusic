@@ -37,6 +37,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -74,6 +75,8 @@ fun SettingScreen(
     onToggleSearchSource: (String) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetDisplayMode: (DisplayMode) -> Unit,
+    onSetDownloadQuality: (String) -> Unit,
+    onSetDownloadLyric: (Boolean) -> Unit,
     onConsumeMessage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -264,6 +267,51 @@ fun SettingScreen(
                             modifier = Modifier.lxFocusable(shape = CircleShape),
                         )
                     }
+                }
+
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+
+                Text("下载", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "下载歌曲与 MV 的默认设置；文件保存在公共媒体库的 Music/LX Music 与 Movies/LX Music 目录。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text("默认下载音质", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Qualitys.all.forEach { q ->
+                        FilterChip(
+                            selected = state.settings.downloadQuality == q,
+                            onClick = { onSetDownloadQuality(q) },
+                            label = { Text(Qualitys.label(q)) },
+                            modifier = Modifier.lxFocusable(shape = CircleShape),
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("同时下载歌词", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "下载完成后保存同名 .lrc 歌词文件",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = state.settings.downloadLyric,
+                        onCheckedChange = { onSetDownloadLyric(it) },
+                        modifier = Modifier.lxFocusable(),
+                    )
                 }
 
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))

@@ -188,6 +188,14 @@ class SettingViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settingsRepository.setDisplayMode(mode) }
     }
 
+    fun setDownloadQuality(quality: String) {
+        viewModelScope.launch { settingsRepository.setDownloadQuality(quality) }
+    }
+
+    fun setDownloadLyric(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setDownloadLyric(enabled) }
+    }
+
     fun consumeMessage() {
         _uiState.value = _uiState.value.copy(message = null)
     }

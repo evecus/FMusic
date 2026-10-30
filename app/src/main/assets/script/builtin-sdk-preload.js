@@ -395,6 +395,9 @@
         case 'pic':
           promise = sdk[args.source].getPic(args.musicInfo).promise
           break
+        case 'mvUrl':
+          promise = sdk[args.source].mv.getMvUrl(args.mvId).then((r) => ({ url: r.url }))
+          break
         case 'getBoards':
           promise = sdk[args.source].leaderboard.getBoards()
           break

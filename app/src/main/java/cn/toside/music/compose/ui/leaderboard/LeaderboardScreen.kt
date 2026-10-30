@@ -72,6 +72,7 @@ fun LeaderboardScreen(
     onPlay: (Int) -> Unit,
     onLoadMore: () -> Unit,
     onAddToList: (MusicInfo) -> Unit,
+    actions: cn.toside.music.compose.ui.component.SongRowActions,
     modifier: Modifier = Modifier,
 ) {
     val adaptive = LocalAdaptive.current
@@ -116,7 +117,7 @@ fun LeaderboardScreen(
                     state = state,
                     listState = listState,
                     onPlay = onPlay,
-                    onAddToList = onAddToList,
+                    actions = actions,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
@@ -141,7 +142,7 @@ fun LeaderboardScreen(
                 state = state,
                 listState = listState,
                 onPlay = onPlay,
-                onAddToList = onAddToList,
+                actions = actions,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
@@ -345,7 +346,7 @@ private fun LeaderboardSongList(
     state: LeaderboardUiState,
     listState: LazyListState,
     onPlay: (Int) -> Unit,
-    onAddToList: (MusicInfo) -> Unit,
+    actions: cn.toside.music.compose.ui.component.SongRowActions,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -377,7 +378,7 @@ private fun LeaderboardSongList(
                         rank = index + 1,
                         info = info,
                         onClick = { onPlay(index) },
-                        onAddToList = { onAddToList(info) },
+                        actions = actions,
                     )
                 }
                 if (state.loadingMore) {
@@ -412,7 +413,12 @@ private fun LeaderboardSongList(
 }
 
 @Composable
-private fun RankedMusicRow(rank: Int, info: MusicInfo, onClick: () -> Unit, onAddToList: () -> Unit) {
+private fun RankedMusicRow(
+    rank: Int,
+    info: MusicInfo,
+    onClick: () -> Unit,
+    actions: cn.toside.music.compose.ui.component.SongRowActions,
+) {
     val adaptive = LocalAdaptive.current
     androidx.compose.material3.ListItem(
         leadingContent = {
@@ -446,11 +452,7 @@ private fun RankedMusicRow(rank: Int, info: MusicInfo, onClick: () -> Unit, onAd
                     label = { Text(Sources.label(info.source)) },
                     modifier = Modifier.lxFocusable(),
                 )
-                LxIconButton(
-                    onClick = onAddToList,
-                    imageVector = Icons.Default.PlaylistAdd,
-                    contentDescription = "收藏到歌单",
-                )
+                cn.toside.music.compose.ui.component.SongMoreButton(info = info, actions = actions)
             }
         },
         modifier = Modifier
