@@ -90,43 +90,37 @@ fun LeaderboardScreen(
     var showBoardSheet by remember { mutableStateOf(false) }
 
     if (adaptive.twoPane) {
-        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            Row(
+        // 不做 contentMaxWidth 居中限制，铺满导航栏右侧全部空间
+        Row(modifier = modifier.fillMaxSize()) {
+            LeaderboardSidePane(
+                adaptive = adaptive,
+                state = state,
+                onSourceChange = onSourceChange,
+                onBoardSelect = onBoardSelect,
+                modifier = Modifier.fillMaxHeight(),
+            )
+            Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .widthIn(max = adaptive.contentMaxWidth)
-                    .fillMaxWidth(),
-            ) {
-                LeaderboardSidePane(
+                    .width(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant),
+            )
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                LeaderboardBoardHeader(
                     adaptive = adaptive,
                     state = state,
-                    onSourceChange = onSourceChange,
-                    onBoardSelect = onBoardSelect,
-                    modifier = Modifier.fillMaxHeight(),
+                    onOpenBoards = null,
                 )
-                Box(
+                LeaderboardSongList(
+                    adaptive = adaptive,
+                    state = state,
+                    listState = listState,
+                    onPlay = onPlay,
+                    onAddToList = onAddToList,
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .width(1.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant),
+                        .weight(1f)
+                        .fillMaxWidth(),
                 )
-                Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                    LeaderboardBoardHeader(
-                        adaptive = adaptive,
-                        state = state,
-                        onOpenBoards = null,
-                    )
-                    LeaderboardSongList(
-                        adaptive = adaptive,
-                        state = state,
-                        listState = listState,
-                        onPlay = onPlay,
-                        onAddToList = onAddToList,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                    )
-                }
             }
         }
     } else {

@@ -139,43 +139,37 @@ private fun SongListGridContent(
     }
 
     if (adaptive.twoPane) {
-        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            Row(
+        // 不做 contentMaxWidth 居中限制，铺满导航栏右侧全部空间
+        Row(modifier = modifier.fillMaxSize()) {
+            SongListFilterPane(
+                adaptive = adaptive,
+                state = state,
+                onSourceChange = onSourceChange,
+                onSortChange = onSortChange,
+                onTagChange = onTagChange,
+                modifier = Modifier.fillMaxHeight(),
+            )
+            Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .widthIn(max = adaptive.contentMaxWidth)
-                    .fillMaxWidth(),
-            ) {
-                SongListFilterPane(
+                    .width(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant),
+            )
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                SongListGridHeader(
                     adaptive = adaptive,
                     state = state,
-                    onSourceChange = onSourceChange,
-                    onSortChange = onSortChange,
-                    onTagChange = onTagChange,
-                    modifier = Modifier.fillMaxHeight(),
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                Box(
+                SongListGridBody(
+                    adaptive = adaptive,
+                    state = state,
+                    gridState = gridState,
+                    onOpenDetail = onOpenDetail,
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .width(1.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant),
+                        .weight(1f)
+                        .fillMaxWidth(),
                 )
-                Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                    SongListGridHeader(
-                        adaptive = adaptive,
-                        state = state,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    SongListGridBody(
-                        adaptive = adaptive,
-                        state = state,
-                        gridState = gridState,
-                        onOpenDetail = onOpenDetail,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                    )
-                }
             }
         }
     } else {
@@ -636,21 +630,15 @@ private fun SongListDetailContent(
     }
 
     if (adaptive.twoPane) {
-        // 平板 / TV：左侧歌单信息（含返回按钮），右侧歌曲列表
-        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            Row(
+        // 平板 / TV：左侧歌单信息（含返回按钮），右侧歌曲列表；铺满全部空间
+        Row(modifier = modifier.fillMaxSize()) {
+            Column(
                 modifier = Modifier
+                    .width(if (adaptive.isTv) 320.dp else 260.dp)
                     .fillMaxHeight()
-                    .widthIn(max = adaptive.contentMaxWidth)
-                    .fillMaxWidth(),
+                    .padding(12.dp)
+                    .verticalScroll(rememberScrollState()),
             ) {
-                Column(
-                    modifier = Modifier
-                        .width(if (adaptive.isTv) 320.dp else 260.dp)
-                        .fillMaxHeight()
-                        .padding(12.dp)
-                        .verticalScroll(rememberScrollState()),
-                ) {
                     LxIconButton(
                         onClick = onBack,
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -716,7 +704,6 @@ private fun SongListDetailContent(
                     )
                 }
             }
-        }
     } else {
         Column(modifier = modifier.fillMaxSize()) {
             // 顶栏：返回 + 歌单名 + 数量
