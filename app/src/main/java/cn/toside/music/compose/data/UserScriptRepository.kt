@@ -19,6 +19,8 @@ data class UserScript(
     val author: String = "",
     val homepage: String = "",
     val description: String = "",
+    /** 远程导入来源链接，用于「更新」；本地导入为空 */
+    val sourceUrl: String = "",
     val updatedAt: Long = 0L,
 )
 
@@ -88,7 +90,8 @@ class UserScriptRepository(private val context: Context) {
         val out = mutableMapOf<String, String>()
         // 只扫前 60 行注释头
         scriptText.lineSequence().take(60).forEach { line ->
-            val m = Regex("""@(name|version|author|description|homepage)\s+(.+)""").find(line) ?: return@forEach
+            val m = Regex("""@(name|version|author|description|homepage)\s+(.+)""")
+                .find(line) ?: return@forEach
             val key = m.groupValues[1]
             if (out.containsKey(key)) return@forEach
             out[key] = m.groupValues[2].trim().trimEnd('*', '/', ' ').trim()
@@ -96,8 +99,23 @@ class UserScriptRepository(private val context: Context) {
         return out
     }
 
-    /** 保存脚本，返回脚本 id */
-    suspend fun save(scriptText: String, existingId: String? = null): UserScript =
+    /** 查找来源链接相同的脚本（用于远程导入时覆盖更新） */
+    suspend fun findBySourceUrl(url: String): UserScript? = withContext(Dispatchers.IO) {
+        if (url.isBlank()) return@withContext null
+        val normalized = RemoteScriptFetcher.normalize(url)
+        readIndex().firstOrNull { it.sourceUrl == url || it.sourceUrl == normalized }
+    }
+
+    /**
+     * 保存脚本，返回保存后的元数据。
+     * @param existingId 覆盖指定 id（远程导入时传 findBySourceUrl 的结果，实现「更新」）
+     * @param sourceUrl 远程来源链接；本地文件导入传空
+     */
+    suspend fun save(
+        scriptText: String,
+        existingId: String? = null,
+        sourceUrl: String = "",
+    ): UserScript =
         withContext(Dispatchers.IO) {
             val meta = parseMeta(scriptText)
             val scriptId = existingId ?: UUID.randomUUID().toString()
@@ -107,6 +125,7 @@ class UserScriptRepository(private val context: Context) {
             val script = meta.copy(
                 id = scriptId,
                 name = meta.name.ifEmpty { "未命名脚本" },
+                sourceUrl = sourceUrl,
                 updatedAt = System.currentTimeMillis(),
             )
             if (idx >= 0) current[idx] = script else current.add(script)
@@ -180,6 +199,7 @@ class UserScriptRepository(private val context: Context) {
                     author = o.optString("author"),
                     homepage = o.optString("homepage"),
                     description = o.optString("description"),
+                    sourceUrl = o.optString("sourceUrl"),
                     updatedAt = o.optLong("updatedAt"),
                 )
             }
@@ -197,6 +217,7 @@ class UserScriptRepository(private val context: Context) {
                     put("author", s.author)
                     put("homepage", s.homepage)
                     put("description", s.description)
+                    put("sourceUrl", s.sourceUrl)
                     put("updatedAt", s.updatedAt)
                 }
             )

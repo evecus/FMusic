@@ -286,6 +286,8 @@ private fun MainScaffold(
                 SettingScreen(
                     state = state,
                     onImport = settingViewModel::importScript,
+                    onImportUrl = settingViewModel::importScriptFromUrl,
+                    onRefreshScript = settingViewModel::refreshScript,
                     onSelectScript = settingViewModel::selectScript,
                     onDeleteScript = settingViewModel::deleteScript,
                     onSetQuality = settingViewModel::setQuality,

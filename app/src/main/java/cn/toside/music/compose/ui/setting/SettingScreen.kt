@@ -12,12 +12,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -25,14 +32,26 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import cn.toside.music.compose.data.ThemeMode
 import cn.toside.music.compose.data.model.Qualitys
@@ -46,6 +65,8 @@ import cn.toside.music.compose.ui.component.lxFocusable
 fun SettingScreen(
     state: SettingUiState,
     onImport: (android.net.Uri) -> Unit,
+    onImportUrl: (String) -> Unit,
+    onRefreshScript: (String) -> Unit,
     onSelectScript: (String) -> Unit,
     onDeleteScript: (String) -> Unit,
     onSetQuality: (String) -> Unit,
@@ -56,6 +77,7 @@ fun SettingScreen(
 ) {
     val adaptive = LocalAdaptive.current
     val snackbarHostState = remember { SnackbarHostState() }
+    var showUrlDialog by remember { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let(onImport) }
@@ -87,23 +109,38 @@ fun SettingScreen(
                 Text("自定义音源", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "导入 LX Music 自定义音源脚本（.js），脚本在独立 QuickJS 沙箱中运行。",
+                    "导入 LX Music 自定义音源脚本（.js），可从本地文件导入，也可直接粘贴远程链接导入；" +
+                        "脚本在独立 QuickJS 沙箱中运行。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
 
-                Button(
-                    onClick = { launcher.launch(arrayOf("text/javascript", "application/javascript", "*/*")) },
-                    enabled = !state.importing,
-                    modifier = Modifier.lxFocusable(),
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (state.importing) {
-                        CircularProgressIndicator(modifier = Modifier.height(16.dp))
-                    } else {
+                    Button(
+                        onClick = {
+                            launcher.launch(
+                                arrayOf("text/javascript", "application/javascript", "*/*")
+                            )
+                        },
+                        enabled = !state.importing,
+                        modifier = Modifier.lxFocusable(),
+                    ) {
                         Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(Modifier.height(4.dp))
-                        Text("导入脚本")
+                        Spacer(Modifier.width(6.dp))
+                        Text("本地文件导入")
+                    }
+                    OutlinedButton(
+                        onClick = { showUrlDialog = true },
+                        enabled = !state.importing,
+                        modifier = Modifier.lxFocusable(),
+                    ) {
+                        Icon(Icons.Default.Link, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("链接导入")
                     }
                 }
 
@@ -121,10 +158,22 @@ fun SettingScreen(
                             headlineContent = { Text(script.name) },
                             supportingContent = {
                                 Text(
-                                    listOfNotNull(
-                                        script.version.takeIf { it.isNotEmpty() },
-                                        script.author.takeIf { it.isNotEmpty() },
-                                    ).joinToString(" · ").ifEmpty { script.id.take(8) }
+                                    buildString {
+                                        val hasMeta = script.version.isNotEmpty() || script.author.isNotEmpty()
+                                        if (script.version.isNotEmpty()) append(script.version)
+                                        if (script.author.isNotEmpty()) {
+                                            if (script.version.isNotEmpty()) append(" · ")
+                                            append(script.author)
+                                        }
+                                        if (script.sourceUrl.isNotBlank()) {
+                                            if (hasMeta) append(" · ")
+                                            append(shortUrl(script.sourceUrl))
+                                        }
+                                        if (isEmpty()) append(script.id.take(8))
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
                                 )
                             },
                             leadingContent = {
@@ -134,11 +183,20 @@ fun SettingScreen(
                                 )
                             },
                             trailingContent = {
-                                LxIconButton(
-                                    onClick = { onDeleteScript(script.id) },
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "删除",
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (script.sourceUrl.isNotBlank()) {
+                                        LxIconButton(
+                                            onClick = { onRefreshScript(script.id) },
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = "更新脚本",
+                                        )
+                                    }
+                                    LxIconButton(
+                                        onClick = { onDeleteScript(script.id) },
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "删除",
+                                    )
+                                }
                             },
                             modifier = Modifier.lxFocusable(),
                         )
@@ -228,4 +286,118 @@ fun SettingScreen(
             modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
+
+    if (showUrlDialog) {
+        ImportUrlDialog(
+            importing = state.importing,
+            onDismiss = { showUrlDialog = false },
+            onConfirm = { url ->
+                onImportUrl(url)
+                showUrlDialog = false
+            },
+        )
+    }
+}
+
+/**
+ * 「链接导入」弹窗：输入 .js 直链即可远程导入音源。
+ * 支持 GitHub / Gitee 的 blob 网页链接，会自动转为 raw 直链。
+ * TV 上弹窗内控件均可被遥控器聚焦，输入框自动获焦。
+ */
+@Composable
+private fun ImportUrlDialog(
+    importing: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    val adaptive = LocalAdaptive.current
+    val clipboard = LocalClipboardManager.current
+    val dialogFocus = remember { FocusRequester() }
+    val inputFocus = remember { FocusRequester() }
+    var text by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        runCatching { inputFocus.requestFocus() }
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!importing) onDismiss() },
+        modifier = Modifier
+            .lxFocusable(focusRequester = dialogFocus, showBorder = false)
+            .then(if (adaptive.isTv) Modifier.widthIn(min = 420.dp, max = 620.dp) else Modifier),
+        title = { Text("从链接导入音源") },
+        text = {
+            Column {
+                Text(
+                    "粘贴 .js 直链即可导入；GitHub / Gitee 的 blob 网页链接会自动转为 raw 直链。" +
+                        "同一链接重复导入将覆盖更新已有脚本。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        label = { Text("脚本链接") },
+                        placeholder = { Text("https://.../music-sdk.js") },
+                        singleLine = true,
+                        enabled = !importing,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = ImeAction.Go,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onGo = { if (text.isNotBlank()) onConfirm(text.trim()) }
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(inputFocus),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(
+                        onClick = {
+                            clipboard.getText()?.text?.trim()?.let { text = it }
+                        },
+                        enabled = !importing,
+                        modifier = Modifier.lxFocusable(),
+                    ) { Text("粘贴") }
+                }
+                if (importing) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.height(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "正在下载…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(text.trim()) },
+                enabled = !importing && text.isNotBlank(),
+                modifier = Modifier.lxFocusable(),
+            ) { Text("导入") }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !importing,
+                modifier = Modifier.lxFocusable(),
+            ) { Text("取消") }
+        },
+    )
+}
+
+/** URL 简短展示：去掉协议头并截断 */
+private fun shortUrl(url: String): String {
+    var s = url.trim()
+    if (s.startsWith("https://", true)) s = s.removePrefix("https://")
+    else if (s.startsWith("http://", true)) s = s.removePrefix("http://")
+    return if (s.length > 42) s.take(40) + "…" else s
 }
