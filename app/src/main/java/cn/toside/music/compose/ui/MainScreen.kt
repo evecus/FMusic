@@ -2,17 +2,44 @@ package cn.toside.music.compose.ui
 
 import android.app.Activity
 import android.content.ContextWrapper
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FormatListNumbered
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -21,16 +48,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -58,19 +88,22 @@ import cn.toside.music.compose.ui.songlist.SongListScreen
 import cn.toside.music.compose.ui.songlist.SongListViewModel
 import cn.toside.music.compose.ui.theme.LxMusicTheme
 
-private data class NavTab(val route: String, val label: String)
+private data class NavTab(val route: String, val label: String, val icon: ImageVector)
 
-/** 顶部导航 Tab（播放不在其中：播放页仅通过底部迷你播放条进入） */
+/** 导航项（播放不在其中：手机/平板经迷你播放条进入，TV 经左侧导航栏顶部按钮进入） */
 private val tabs = listOf(
-    NavTab("search", "搜索"),
-    NavTab("leaderboard", "排行"),
-    NavTab("songlist", "歌单"),
-    NavTab("mylist", "收藏"),
-    NavTab("setting", "设置"),
+    NavTab("mylist", "收藏", Icons.Default.Favorite),
+    NavTab("search", "搜索", Icons.Default.Search),
+    NavTab("leaderboard", "排行", Icons.Default.FormatListNumbered),
+    NavTab("songlist", "歌单", Icons.AutoMirrored.Filled.QueueMusic),
+    NavTab("setting", "设置", Icons.Default.Settings),
 )
 
-/** 播放页为独立全屏页面，不显示顶部导航与迷你播放条 */
+/** 播放页为独立全屏页面，不显示导航与迷你播放条 */
 private val chromelessRoutes = setOf("play")
+
+/** 悬浮迷你播放条占位（避免列表最后一项被遮住） */
+private val miniOverlaySpace = 76.dp
 
 @Composable
 fun MainScreen(modifier: Modifier = Modifier) {
@@ -93,22 +126,28 @@ fun MainScreen(modifier: Modifier = Modifier) {
         ThemeMode.DARK -> true
     }
 
-    // 系统状态栏/导航栏图标颜色跟随应用主题：浅色主题用深色图标，深色主题用浅色图标
-    val view = LocalView.current
-    if (!view.isInEditMode) {
-        SideEffect {
-            var ctx = view.context
-            while (ctx is ContextWrapper && ctx !is Activity) ctx = ctx.baseContext
-            (ctx as? Activity)?.window?.let { window ->
+    // 注入设备形态（含用户显示模式覆盖），TV 端同时放大字号
+    ProvideAdaptive(displayMode = settingState.settings.displayMode) {
+        // 系统栏：手机/平板正常显示状态栏；TV 全屏沉浸，不预留状态栏区域
+        val view = LocalView.current
+        val adaptive = LocalAdaptive.current
+        if (!view.isInEditMode) {
+            SideEffect {
+                val window = findActivityWindow(view) ?: return@SideEffect
                 val controller = WindowCompat.getInsetsController(window, view)
                 controller.isAppearanceLightStatusBars = !dark
                 controller.isAppearanceLightNavigationBars = !dark
+                if (adaptive.isTv) {
+                    // TV：沉浸全屏，隐藏状态栏；从设置切回其他模式时恢复
+                    controller.hide(WindowInsetsCompat.Type.statusBars())
+                    controller.systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                } else {
+                    controller.show(WindowInsetsCompat.Type.statusBars())
+                }
             }
         }
-    }
 
-    // 注入设备形态（手机 / 平板 / TV），TV 端同时放大字号，供全应用读取
-    ProvideAdaptive {
         LxMusicTheme(darkTheme = dark) {
             MainScaffold(
                 navController = navController,
@@ -126,9 +165,15 @@ fun MainScreen(modifier: Modifier = Modifier) {
     }
 }
 
+private fun findActivityWindow(view: android.view.View): android.view.Window? {
+    var ctx = view.context
+    while (ctx is ContextWrapper && ctx !is Activity) ctx = ctx.baseContext
+    return (ctx as? Activity)?.window
+}
+
 @Composable
 private fun MainScaffold(
-    navController: androidx.navigation.NavHostController,
+    navController: NavHostController,
     currentRoute: String,
     searchViewModel: SearchViewModel,
     leaderboardViewModel: LeaderboardViewModel,
@@ -143,158 +188,276 @@ private fun MainScaffold(
     var addToListTarget by remember { mutableStateOf<MusicInfo?>(null) }
     val myListsState by myListViewModel.uiState.collectAsState()
 
-    // 播放页为独立全屏页面：不显示顶部导航与迷你播放条
-    val showChrome = currentRoute !in chromelessRoutes
-    val selectedTabIndex = tabs.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
-
     val adaptive = LocalAdaptive.current
-    // TV 遥控器落焦点起点：进入带导航栏的页面时把焦点放到当前 Tab
+    // 播放页为独立全屏页面：不显示导航与迷你播放条
+    val showChrome = currentRoute !in chromelessRoutes
+    val isSideNav = !adaptive.isPhone
+
+    // TV 遥控器落焦点起点：进入带导航栏的页面时把焦点放到当前导航项
     val navFocus = remember { FocusRequester() }
-    LaunchedEffect(currentRoute) {
-        if (adaptive.isTv) runCatching { navFocus.requestFocus() }
+    LaunchedEffect(currentRoute, adaptive.deviceType) {
+        if (adaptive.isTv && showChrome) runCatching { navFocus.requestFocus() }
     }
 
-    Scaffold(
-        modifier = modifier
-            .fillMaxSize()
-            // TV 过扫描安全区：内容避开屏幕边缘
-            .then(
-                if (adaptive.isTv) Modifier.padding(horizontal = 32.dp, vertical = 20.dp)
-                else Modifier
-            ),
-        topBar = {
-            if (showChrome) {
-                // 避让系统状态栏（targetSdk 35 强制 edge-to-edge，需自行处理 insets）
-                TabRow(
-                    selectedTabIndex = selectedTabIndex,
-                    modifier = Modifier.statusBarsPadding(),
+    if (adaptive.isPhone) {
+        // ── 手机：底部导航栏 + 悬浮迷你播放条（与内容重叠，位于导航栏上方） ──
+        Scaffold(
+            modifier = modifier.fillMaxSize(),
+            bottomBar = {
+                if (showChrome) {
+                    BottomNavBar(
+                        currentRoute = currentRoute,
+                        navFocus = navFocus,
+                        onSelect = { navigateTab(navController, it) },
+                    )
+                }
+            },
+        ) { padding ->
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .consumeWindowInsets(padding),
+            ) {
+                NavHost(
+                    navController = navController,
+                    startDestination = "mylist",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // 悬浮迷你条占位，防止列表最后一项被遮住
+                        .then(if (showChrome && playerState.current != null) Modifier.padding(bottom = miniOverlaySpace) else Modifier),
                 ) {
-                    tabs.forEach { tab ->
-                        val selected = currentRoute == tab.route
-                        Tab(
-                            selected = selected,
-                            onClick = {
-                                navController.navigate(tab.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            text = { Text(tab.label) },
-                            modifier = Modifier.lxFocusable(
-                                focusRequester = if (selected) navFocus else null,
-                                shape = RoundedCornerShape(8.dp),
-                            ),
+                    composable("search") {
+                        val state by searchViewModel.uiState.collectAsState()
+                        SearchScreen(
+                            state = state,
+                            onKeywordChange = searchViewModel::setKeyword,
+                            onSearch = searchViewModel::search,
+                            onSourceChange = searchViewModel::setSource,
+                            onPlay = searchViewModel::playAll,
+                            onLoadMore = searchViewModel::loadMore,
+                            onAddToList = { addToListTarget = it },
+                        )
+                    }
+                    composable("leaderboard") {
+                        val state by leaderboardViewModel.uiState.collectAsState()
+                        LeaderboardScreen(
+                            state = state,
+                            onSourceChange = leaderboardViewModel::setSource,
+                            onBoardSelect = leaderboardViewModel::selectBoard,
+                            onPlay = leaderboardViewModel::playAt,
+                            onLoadMore = leaderboardViewModel::loadMore,
+                            onAddToList = { addToListTarget = it },
+                        )
+                    }
+                    composable("songlist") {
+                        val state by songListViewModel.uiState.collectAsState()
+                        SongListScreen(
+                            state = state,
+                            onSourceChange = songListViewModel::setSource,
+                            onSortChange = songListViewModel::setSort,
+                            onTagChange = songListViewModel::setTag,
+                            onOpenDetail = songListViewModel::openDetail,
+                            onCloseDetail = songListViewModel::closeDetail,
+                            onPlay = songListViewModel::playAt,
+                            onLoadMoreLists = songListViewModel::loadMoreLists,
+                            onLoadMoreDetail = songListViewModel::loadMoreDetail,
+                            onAddToList = { addToListTarget = it },
+                        )
+                    }
+                    composable("mylist") {
+                        val state by myListViewModel.uiState.collectAsState()
+                        MyListScreen(
+                            state = state,
+                            onSelectList = myListViewModel::selectList,
+                            onCreateList = myListViewModel::createList,
+                            onRenameList = myListViewModel::renameList,
+                            onRemoveList = myListViewModel::removeList,
+                            onPlay = myListViewModel::playAt,
+                            onPlayAll = myListViewModel::playAll,
+                            onRemoveSong = myListViewModel::removeSongAt,
+                            onMoveSong = myListViewModel::moveSongAt,
+                            onClearList = myListViewModel::clearActiveList,
+                            onToastConsumed = myListViewModel::consumeToast,
+                        )
+                    }
+                    composable("play") {
+                        val state by playViewModel.playerRepository.uiState.collectAsStateWithLifecycle()
+                        val extra by playViewModel.extra.collectAsState()
+                        PlayScreen(
+                            state = state,
+                            extra = extra,
+                            onToggle = playViewModel::togglePlay,
+                            onNext = playViewModel::next,
+                            onPrevious = playViewModel::previous,
+                            onSeek = playViewModel::seekTo,
+                            onCycleMode = playViewModel::cyclePlayMode,
+                            onBack = { navController.popBackStack() },
+                            onAddToList = { addToListTarget = it },
+                            onPlayQueueAt = playViewModel::playQueueAt,
+                        )
+                    }
+                    composable("setting") {
+                        val state by settingViewModel.uiState.collectAsState()
+                        SettingScreen(
+                            state = state,
+                            onImport = settingViewModel::importScript,
+                            onImportUrl = settingViewModel::importScriptFromUrl,
+                            onRefreshScript = settingViewModel::refreshScript,
+                            onSelectScript = settingViewModel::selectScript,
+                            onDeleteScript = settingViewModel::deleteScript,
+                            onSetQuality = settingViewModel::setQuality,
+                            onToggleSearchSource = settingViewModel::toggleSearchSource,
+                            onSetThemeMode = settingViewModel::setThemeMode,
+                            onSetDisplayMode = settingViewModel::setDisplayMode,
+                            onConsumeMessage = settingViewModel::consumeMessage,
                         )
                     }
                 }
+                if (showChrome && playerState.current != null) {
+                    MiniPlayer(
+                        state = playerState,
+                        onToggle = playViewModel::togglePlay,
+                        onClick = { navController.navigate("play") { launchSingleTop = true } },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .clip(RoundedCornerShape(14.dp)),
+                    )
+                }
             }
-        },
-        bottomBar = {
-            if (showChrome) {
-                MiniPlayer(
-                    state = playerState,
-                    onToggle = playViewModel::togglePlay,
-                    // 播放页唯一入口：直接压栈，返回时回到原页面
-                    onClick = { navController.navigate("play") { launchSingleTop = true } },
-                    // 避让系统导航栏（手势条）
-                    modifier = Modifier.navigationBarsPadding(),
-                )
-            }
-        },
-    ) { padding ->
-        NavHost(
-            navController = navController,
-            startDestination = "mylist",
-            modifier = Modifier
-                .padding(padding)
-                // 消费掉已应用的系统栏 insets，防止内页 TopAppBar 等再次叠加状态栏高度
-                .consumeWindowInsets(padding),
-        ) {
-            composable("search") {
-                val state by searchViewModel.uiState.collectAsState()
-                SearchScreen(
-                    state = state,
-                    onKeywordChange = searchViewModel::setKeyword,
-                    onSearch = searchViewModel::search,
-                    onSourceChange = searchViewModel::setSource,
-                    onPlay = searchViewModel::playAll,
-                    onLoadMore = searchViewModel::loadMore,
-                    onAddToList = { addToListTarget = it },
-                )
-            }
-            composable("leaderboard") {
-                val state by leaderboardViewModel.uiState.collectAsState()
-                LeaderboardScreen(
-                    state = state,
-                    onSourceChange = leaderboardViewModel::setSource,
-                    onBoardSelect = leaderboardViewModel::selectBoard,
-                    onPlay = leaderboardViewModel::playAt,
-                    onLoadMore = leaderboardViewModel::loadMore,
-                    onAddToList = { addToListTarget = it },
-                )
-            }
-            composable("songlist") {
-                val state by songListViewModel.uiState.collectAsState()
-                SongListScreen(
-                    state = state,
-                    onSourceChange = songListViewModel::setSource,
-                    onSortChange = songListViewModel::setSort,
-                    onTagChange = songListViewModel::setTag,
-                    onOpenDetail = songListViewModel::openDetail,
-                    onCloseDetail = songListViewModel::closeDetail,
-                    onPlay = songListViewModel::playAt,
-                    onLoadMoreLists = songListViewModel::loadMoreLists,
-                    onLoadMoreDetail = songListViewModel::loadMoreDetail,
-                    onAddToList = { addToListTarget = it },
-                )
-            }
-            composable("mylist") {
-                val state by myListViewModel.uiState.collectAsState()
-                MyListScreen(
-                    state = state,
-                    onSelectList = myListViewModel::selectList,
-                    onCreateList = myListViewModel::createList,
-                    onRenameList = myListViewModel::renameList,
-                    onRemoveList = myListViewModel::removeList,
-                    onPlay = myListViewModel::playAt,
-                    onPlayAll = myListViewModel::playAll,
-                    onRemoveSong = myListViewModel::removeSongAt,
-                    onMoveSong = myListViewModel::moveSongAt,
-                    onClearList = myListViewModel::clearActiveList,
-                    onToastConsumed = myListViewModel::consumeToast,
-                )
-            }
-            composable("play") {
-                val state by playViewModel.playerRepository.uiState.collectAsStateWithLifecycle()
-                val extra by playViewModel.extra.collectAsState()
-                PlayScreen(
-                    state = state,
-                    extra = extra,
-                    onToggle = playViewModel::togglePlay,
-                    onNext = playViewModel::next,
-                    onPrevious = playViewModel::previous,
-                    onSeek = playViewModel::seekTo,
-                    onCycleMode = playViewModel::cyclePlayMode,
-                    onBack = { navController.popBackStack() },
-                    onAddToList = { addToListTarget = it },
-                    onPlayQueueAt = playViewModel::playQueueAt,
-                )
-            }
-            composable("setting") {
-                val state by settingViewModel.uiState.collectAsState()
-                SettingScreen(
-                    state = state,
-                    onImport = settingViewModel::importScript,
-                    onImportUrl = settingViewModel::importScriptFromUrl,
-                    onRefreshScript = settingViewModel::refreshScript,
-                    onSelectScript = settingViewModel::selectScript,
-                    onDeleteScript = settingViewModel::deleteScript,
-                    onSetQuality = settingViewModel::setQuality,
-                    onToggleSearchSource = settingViewModel::toggleSearchSource,
-                    onSetThemeMode = settingViewModel::setThemeMode,
-                    onConsumeMessage = settingViewModel::consumeMessage,
-                )
+        }
+    } else {
+        // ── 平板 / TV：左侧导航栏 + 右侧内容 ──
+        Row(modifier = modifier.fillMaxSize()) {
+            SideNavBar(
+                currentRoute = currentRoute,
+                navFocus = navFocus,
+                isTv = adaptive.isTv,
+                playerState = playerState,
+                loading = playerState.loading,
+                onSelect = { navigateTab(navController, it) },
+                onToggle = playViewModel::togglePlay,
+                onPrevious = playViewModel::previous,
+                onNext = playViewModel::next,
+                onOpenPlay = { navController.navigate("play") { launchSingleTop = true } },
+            )
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+            ) {
+                NavHost(
+                    navController = navController,
+                    startDestination = "mylist",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // 平板悬浮迷你条占位（TV 无迷你条）
+                        .then(
+                            if (showChrome && !adaptive.isTv && playerState.current != null)
+                                Modifier.padding(bottom = miniOverlaySpace) else Modifier
+                        ),
+                ) {
+                    composable("search") {
+                        val state by searchViewModel.uiState.collectAsState()
+                        SearchScreen(
+                            state = state,
+                            onKeywordChange = searchViewModel::setKeyword,
+                            onSearch = searchViewModel::search,
+                            onSourceChange = searchViewModel::setSource,
+                            onPlay = searchViewModel::playAll,
+                            onLoadMore = searchViewModel::loadMore,
+                            onAddToList = { addToListTarget = it },
+                        )
+                    }
+                    composable("leaderboard") {
+                        val state by leaderboardViewModel.uiState.collectAsState()
+                        LeaderboardScreen(
+                            state = state,
+                            onSourceChange = leaderboardViewModel::setSource,
+                            onBoardSelect = leaderboardViewModel::selectBoard,
+                            onPlay = leaderboardViewModel::playAt,
+                            onLoadMore = leaderboardViewModel::loadMore,
+                            onAddToList = { addToListTarget = it },
+                        )
+                    }
+                    composable("songlist") {
+                        val state by songListViewModel.uiState.collectAsState()
+                        SongListScreen(
+                            state = state,
+                            onSourceChange = songListViewModel::setSource,
+                            onSortChange = songListViewModel::setSort,
+                            onTagChange = songListViewModel::setTag,
+                            onOpenDetail = songListViewModel::openDetail,
+                            onCloseDetail = songListViewModel::closeDetail,
+                            onPlay = songListViewModel::playAt,
+                            onLoadMoreLists = songListViewModel::loadMoreLists,
+                            onLoadMoreDetail = songListViewModel::loadMoreDetail,
+                            onAddToList = { addToListTarget = it },
+                        )
+                    }
+                    composable("mylist") {
+                        val state by myListViewModel.uiState.collectAsState()
+                        MyListScreen(
+                            state = state,
+                            onSelectList = myListViewModel::selectList,
+                            onCreateList = myListViewModel::createList,
+                            onRenameList = myListViewModel::renameList,
+                            onRemoveList = myListViewModel::removeList,
+                            onPlay = myListViewModel::playAt,
+                            onPlayAll = myListViewModel::playAll,
+                            onRemoveSong = myListViewModel::removeSongAt,
+                            onMoveSong = myListViewModel::moveSongAt,
+                            onClearList = myListViewModel::clearActiveList,
+                            onToastConsumed = myListViewModel::consumeToast,
+                        )
+                    }
+                    composable("play") {
+                        val state by playViewModel.playerRepository.uiState.collectAsStateWithLifecycle()
+                        val extra by playViewModel.extra.collectAsState()
+                        PlayScreen(
+                            state = state,
+                            extra = extra,
+                            onToggle = playViewModel::togglePlay,
+                            onNext = playViewModel::next,
+                            onPrevious = playViewModel::previous,
+                            onSeek = playViewModel::seekTo,
+                            onCycleMode = playViewModel::cyclePlayMode,
+                            onBack = { navController.popBackStack() },
+                            onAddToList = { addToListTarget = it },
+                            onPlayQueueAt = playViewModel::playQueueAt,
+                        )
+                    }
+                    composable("setting") {
+                        val state by settingViewModel.uiState.collectAsState()
+                        SettingScreen(
+                            state = state,
+                            onImport = settingViewModel::importScript,
+                            onImportUrl = settingViewModel::importScriptFromUrl,
+                            onRefreshScript = settingViewModel::refreshScript,
+                            onSelectScript = settingViewModel::selectScript,
+                            onDeleteScript = settingViewModel::deleteScript,
+                            onSetQuality = settingViewModel::setQuality,
+                            onToggleSearchSource = settingViewModel::toggleSearchSource,
+                            onSetThemeMode = settingViewModel::setThemeMode,
+                            onSetDisplayMode = settingViewModel::setDisplayMode,
+                            onConsumeMessage = settingViewModel::consumeMessage,
+                        )
+                    }
+                }
+                // 平板：迷你播放条悬浮在底部（与手机一致）；TV 不显示迷你条
+                if (showChrome && !adaptive.isTv && playerState.current != null) {
+                    MiniPlayer(
+                        state = playerState,
+                        onToggle = playViewModel::togglePlay,
+                        onClick = { navController.navigate("play") { launchSingleTop = true } },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                            .navigationBarsPadding()
+                            .clip(RoundedCornerShape(14.dp)),
+                    )
+                }
             }
         }
     }
@@ -310,5 +473,217 @@ private fun MainScaffold(
                 addToListTarget = null
             },
         )
+    }
+}
+
+private fun navigateTab(navController: NavHostController, route: String) {
+    navController.navigate(route) {
+        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
+/** 手机底部导航栏 */
+@Composable
+private fun BottomNavBar(
+    currentRoute: String,
+    navFocus: FocusRequester,
+    onSelect: (String) -> Unit,
+) {
+    NavigationBar {
+        tabs.forEach { tab ->
+            val selected = currentRoute == tab.route
+            NavigationBarItem(
+                selected = selected,
+                onClick = { onSelect(tab.route) },
+                icon = { Icon(tab.icon, contentDescription = tab.label) },
+                label = { Text(tab.label) },
+                modifier = Modifier.lxFocusable(
+                    focusRequester = if (selected) navFocus else null,
+                    shape = RoundedCornerShape(10.dp),
+                ),
+            )
+        }
+    }
+}
+
+/**
+ * 平板 / TV 左侧导航栏。
+ *  - 平板：导航 + 悬浮迷你条（内容区底部），状态栏/手势条正常避让；
+ *  - TV  ：顶部为播放控制区（上一首 / 播放暂停 / 下一首 + 打开播放页），
+ *          无迷你播放条；全屏沉浸。
+ */
+@Composable
+private fun SideNavBar(
+    currentRoute: String,
+    navFocus: FocusRequester,
+    isTv: Boolean,
+    playerState: PlayerUiState,
+    loading: Boolean,
+    onSelect: (String) -> Unit,
+    onToggle: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onOpenPlay: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val width = if (isTv) 240.dp else 200.dp
+    Surface(
+        modifier = modifier.fillMaxHeight(),
+        tonalElevation = 2.dp,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier
+                .width(width)
+                .fillMaxHeight()
+                // 平板避让状态栏；TV 全屏不预留
+                .then(if (isTv) Modifier else Modifier.statusBarsPadding())
+                .padding(vertical = 12.dp),
+        ) {
+            // TV：导航栏顶部播放控制区（播放界面入口）
+            if (isTv) {
+                TvPlayControls(
+                    playerState = playerState,
+                    loading = loading,
+                    onToggle = onToggle,
+                    onPrevious = onPrevious,
+                    onNext = onNext,
+                    onOpenPlay = onOpenPlay,
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+
+            tabs.forEach { tab ->
+                val selected = currentRoute == tab.route
+                val bg = if (selected) MaterialTheme.colorScheme.secondaryContainer
+                else androidx.compose.ui.graphics.Color.Transparent
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(bg)
+                        .clickable { onSelect(tab.route) }
+                        .lxFocusable(
+                            focusRequester = if (selected) navFocus else null,
+                            showBorder = false,
+                        )
+                        .padding(horizontal = 14.dp, vertical = if (isTv) 14.dp else 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        tab.icon,
+                        contentDescription = tab.label,
+                        tint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(if (isTv) 28.dp else 24.dp),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        tab.label,
+                        style = if (isTv) MaterialTheme.typography.titleMedium
+                        else MaterialTheme.typography.bodyLarge,
+                        color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+                        else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+
+            Spacer(Modifier.weight(1f))
+            // 平板：底部手势条避让；TV 全屏不需要
+            if (!isTv) Spacer(Modifier.navigationBarsPadding())
+        }
+    }
+}
+
+/** TV 左侧导航栏顶部的播放控制区：上一首 / 播放暂停 / 下一首 + 打开播放页 */
+@Composable
+private fun TvPlayControls(
+    playerState: PlayerUiState,
+    loading: Boolean,
+    onToggle: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onOpenPlay: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // 当前曲名（无曲目时显示占位）
+        Text(
+            playerState.current?.name ?: "未在播放",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            cn.toside.music.compose.ui.component.LxIconButton(
+                onClick = onPrevious,
+                imageVector = Icons.Default.SkipPrevious,
+                contentDescription = "上一首",
+            )
+            // 播放/暂停：圆形主色大按钮
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .clickable(onClick = onToggle)
+                    .lxFocusable(shape = CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (loading) {
+                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                } else {
+                    Icon(
+                        if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (playerState.isPlaying) "暂停" else "播放",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(40.dp),
+                    )
+                }
+            }
+            cn.toside.music.compose.ui.component.LxIconButton(
+                onClick = onNext,
+                imageVector = Icons.Default.SkipNext,
+                contentDescription = "下一首",
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        // 打开播放页入口
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = onOpenPlay)
+                .lxFocusable()
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Default.Album,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "播放页",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }

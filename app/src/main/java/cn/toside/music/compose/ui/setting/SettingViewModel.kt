@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import cn.toside.music.compose.MusicApplication
 import cn.toside.music.compose.data.AppSettings
+import cn.toside.music.compose.data.DisplayMode
 import cn.toside.music.compose.data.SettingsRepository
 import cn.toside.music.compose.data.ThemeMode
 import cn.toside.music.compose.data.UserScript
@@ -181,6 +182,10 @@ class SettingViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch { settingsRepository.setThemeMode(mode) }
+    }
+
+    fun setDisplayMode(mode: DisplayMode) {
+        viewModelScope.launch { settingsRepository.setDisplayMode(mode) }
     }
 
     fun consumeMessage() {

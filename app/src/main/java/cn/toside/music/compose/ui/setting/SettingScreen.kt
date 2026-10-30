@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import cn.toside.music.compose.data.DisplayMode
 import cn.toside.music.compose.data.ThemeMode
 import cn.toside.music.compose.data.model.Qualitys
 import cn.toside.music.compose.data.model.Sources
@@ -72,6 +73,7 @@ fun SettingScreen(
     onSetQuality: (String) -> Unit,
     onToggleSearchSource: (String) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
+    onSetDisplayMode: (DisplayMode) -> Unit,
     onConsumeMessage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -234,6 +236,31 @@ fun SettingScreen(
                             selected = s in state.settings.searchSources,
                             onClick = { onToggleSearchSource(s) },
                             label = { Text(Sources.label(s)) },
+                            modifier = Modifier.lxFocusable(shape = CircleShape),
+                        )
+                    }
+                }
+
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+
+                Text("显示模式", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "选择界面按哪种设备形态渲染；自动时按当前设备自动检测。" +
+                        "切换后立即生效（导航结构：手机底部栏 / 平板与电视左侧栏）。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    DisplayMode.entries.forEach { mode ->
+                        FilterChip(
+                            selected = state.settings.displayMode == mode,
+                            onClick = { onSetDisplayMode(mode) },
+                            label = { Text(mode.label) },
                             modifier = Modifier.lxFocusable(shape = CircleShape),
                         )
                     }

@@ -94,14 +94,32 @@ val LocalAdaptive = compositionLocalOf { AdaptiveInfo(DeviceType.PHONE, WidthCla
 
 /**
  * 根布局注入：提供 [LocalAdaptive]，并在 TV 端统一放大字号（仅字体缩放，不改 dp，避免布局错乱）。
+ *
+ * @param displayMode 用户设置的显示模式；AUTO 按设备自动检测，否则强制按指定形态渲染
  */
 @Composable
-fun ProvideAdaptive(content: @Composable () -> Unit) {
+fun ProvideAdaptive(
+    displayMode: cn.toside.music.compose.data.DisplayMode =
+        cn.toside.music.compose.data.DisplayMode.AUTO,
+    content: @Composable () -> Unit,
+) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
-    val info = remember(context, configuration.screenWidthDp, configuration.smallestScreenWidthDp) {
+    val info = remember(
+        context,
+        configuration.screenWidthDp,
+        configuration.smallestScreenWidthDp,
+        displayMode,
+    ) {
+        val detected = detectDeviceType(context, configuration)
+        val deviceType = when (displayMode) {
+            cn.toside.music.compose.data.DisplayMode.AUTO -> detected
+            cn.toside.music.compose.data.DisplayMode.PHONE -> DeviceType.PHONE
+            cn.toside.music.compose.data.DisplayMode.TABLET -> DeviceType.TABLET
+            cn.toside.music.compose.data.DisplayMode.TV -> DeviceType.TV
+        }
         AdaptiveInfo(
-            deviceType = detectDeviceType(context, configuration),
+            deviceType = deviceType,
             widthClass = when {
                 configuration.screenWidthDp < 600 -> WidthClass.COMPACT
                 configuration.screenWidthDp < 840 -> WidthClass.MEDIUM
