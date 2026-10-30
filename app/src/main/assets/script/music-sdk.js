@@ -12633,6 +12633,7 @@ ${lrclist ? lrclist.map((l) => `[${l.time}]${l.text}
             });
           }
           let result = await Promise.all(this.createTask((songList || songInfo.list).map((item) => ({ hash: item.hash })))).then(([...datas]) => datas.flat());
+          result = this.enrichMvInfo(songList || songInfo.list, result);
           return {
             list: this.filterData2(result) || [],
             page: 1,
@@ -12659,6 +12660,7 @@ ${lrclist ? lrclist.map((l) => `[${l.time}]${l.text}
             else return this.getUserListDetail4(songInfo, chain, page).catch(() => this.getUserListDetail5(chain));
           }
           let result = await Promise.all(this.createTask(songInfo.list.map((item) => ({ hash: item.hash })))).then(([...datas]) => datas.flat());
+          result = this.enrichMvInfo(songInfo.list, result);
           return {
             list: this.filterData2(result) || [],
             page: 1,
@@ -12682,6 +12684,33 @@ ${lrclist ? lrclist.map((l) => `[${l.time}]${l.text}
             return true;
           });
         },
+        // mobile getMusicInfos 同款：聚合接口(gateway)的 audio_info 不返回 mvhash，
+        // 从原始列表收集 mv，再按 hash 或「归一化歌名+歌手」写回聚合结果，由 filterData2 读取
+        normName(s) {
+          return decodeName(s || "").replace(/\s*[-_—–]\s*[^-_—–]*$/, "").trim();
+        },
+        normSinger(s) {
+          return decodeName(s || "").replace(/[\/、，,|&\s]+/g, "");
+        },
+        enrichMvInfo(rawList, datas) {
+          const mvHashes = /* @__PURE__ */ new Map();
+          const mvNameMap = /* @__PURE__ */ new Map();
+          (rawList || []).forEach((item) => {
+            const mv = item?.mvhash || item?.mv_hash || item?.audio_info?.mvhash || item?.base?.mvhash || item?.high_mv_hash;
+            if (!mv) return;
+            if (item.hash) mvHashes.set(item.hash, mv);
+            if (item.songname != null) {
+              const key = `${this.normName(item.songname)}|${this.normSinger(item.singername || item.author_name)}`;
+              if (key !== "|") mvNameMap.set(key, mv);
+            }
+          });
+          (datas || []).forEach((item) => {
+            if (!item?.audio_info) return;
+            const mv = mvHashes.get(item.audio_info.hash) ?? mvNameMap.get(`${this.normName(item.songname)}|${this.normSinger(item.author_name)}`);
+            if (mv) item.audio_info.mvhash = mv;
+          });
+          return datas;
+        },
         async getUserListDetailByLink({ info }, link) {
           let listInfo = info["0"];
           let total = listInfo.count;
@@ -12699,7 +12728,9 @@ ${lrclist ? lrclist.map((l) => `[${l.time}]${l.text}
             }).then((data) => data.list.info));
           }
           let result = await Promise.all(tasks).then(([...datas]) => datas.flat());
+          const rawList1 = result;
           result = await Promise.all(this.createTask(this.deDuplication(result).map((item) => ({ hash: item.hash })))).then(([...datas]) => datas.flat());
+          result = this.enrichMvInfo(rawList1, result);
           return {
             list: this.filterData2(result) || [],
             page,
@@ -12748,6 +12779,7 @@ ${lrclist ? lrclist.map((l) => `[${l.time}]${l.text}
           });
           const songInfo = await this.createGetListDetail2Task(id, info.songcount);
           let result = await Promise.all(this.createTask(this.deDuplication(songInfo).map((item) => ({ hash: item.hash })))).then(([...datas]) => datas.flat());
+          result = this.enrichMvInfo(songInfo, result);
           return {
             list: this.filterData2(result) || [],
             page: 1,
@@ -12786,7 +12818,9 @@ ${lrclist ? lrclist.map((l) => `[${l.time}]${l.text}
           let result = body.match(/var\sdataFromSmarty\s=\s(\[.+?\])/);
           if (result) result = JSON.parse(result[1]);
           this.cache.set(chain, result);
+          const rawList2 = result;
           result = await Promise.all(this.createTask(result.map((item) => ({ hash: item.hash })))).then(([...datas]) => datas.flat());
+          result = this.enrichMvInfo(rawList2, result);
           return this.filterData2(result);
         },
         async getUserListDetail4(songInfo, chain, page) {
@@ -12840,6 +12874,7 @@ ${lrclist ? lrclist.map((l) => `[${l.time}]${l.text}
             }
           });
           let result = await Promise.all(this.createTask(info.info.map((item) => ({ hash: item.hash })))).then(([...datas]) => datas.flat());
+          result = this.enrichMvInfo(info.info, result);
           return this.filterData2(result);
         },
         async getUserListDetail(link, page, retryNum = 0) {
@@ -12971,7 +13006,7 @@ ${lrclist ? lrclist.map((l) => `[${l.time}]${l.text}
               img: null,
               lrc: null,
               hash: item.hash,
-              mv: item.mvhash || (Array.isArray(item.mvdata) && item.mvdata.length > 0 ? item.mvdata[0].hash : null) || null,
+              mv: item.mvhash || item.mv_hash || (item.audio_info && item.audio_info.mvhash) || (item.base && item.base.mvhash) || item.high_mv_hash || (Array.isArray(item.mvdata) && item.mvdata.length > 0 ? item.mvdata[0].hash : null) || null,
               types,
               _types,
               typeUrl: {}
