@@ -1,5 +1,6 @@
 package cn.toside.music.compose.ui.search
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -38,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import cn.toside.music.compose.data.model.MusicInfo
@@ -112,7 +115,7 @@ fun SearchScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
                 state.loading -> Box(
                     Modifier.fillMaxSize(),
@@ -150,6 +153,102 @@ fun SearchScreen(
                 }
             }
         }
+
+        // TV：屏上键盘（遥控器无法呼出输入法，内置 26 字母 + 数字键盘）
+        if (adaptive.isTv) {
+            TvKeyboard(
+                keyword = state.keyword,
+                onKeywordChange = onKeywordChange,
+                onSearch = onSearch,
+            )
+        }
+    }
+}
+
+/** TV 屏上键盘：数字行 + 三行字母 + 删除/清空/搜索 */
+@Composable
+private fun TvKeyboard(
+    keyword: String,
+    onKeywordChange: (String) -> Unit,
+    onSearch: () -> Unit,
+) {
+    val numberRow = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
+    val row1 = listOf("Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P")
+    val row2 = listOf("A", "S", "D", "F", "G", "H", "J", "K", "L")
+    val row3 = listOf("Z", "X", "C", "V", "B", "N", "M")
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        KeyboardRow(numberRow) { onKeywordChange(keyword + it) }
+        KeyboardRow(row1) { onKeywordChange(keyword + it) }
+        KeyboardRow(row2) { onKeywordChange(keyword + it) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            row3.forEach { key ->
+                TvKey(label = key, onClick = { onKeywordChange(keyword + key) }, modifier = Modifier.weight(1f))
+            }
+            TvKey(
+                label = "⌫",
+                onClick = { onKeywordChange(keyword.dropLast(1)) },
+                modifier = Modifier.weight(3f),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            TvKey(
+                label = "清空",
+                onClick = { onKeywordChange("") },
+                modifier = Modifier.weight(2f),
+            )
+            TvKey(
+                label = "搜索",
+                onClick = onSearch,
+                modifier = Modifier.weight(8f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun KeyboardRow(keys: List<String>, onKey: (String) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        keys.forEach { key ->
+            TvKey(label = key, onClick = { onKey(key) }, modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun TvKey(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .height(if (label.length > 1) 44.dp else 48.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable(onClick = onClick)
+            .lxFocusable(shape = RoundedCornerShape(10.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            style = if (label.length > 1) MaterialTheme.typography.labelLarge
+            else MaterialTheme.typography.titleMedium,
+        )
     }
 }
 

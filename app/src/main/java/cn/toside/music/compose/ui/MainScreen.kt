@@ -283,19 +283,10 @@ private fun MainScaffold(
                         )
                     }
                     composable("play") {
-                        val state by playViewModel.playerRepository.uiState.collectAsStateWithLifecycle()
-                        val extra by playViewModel.extra.collectAsState()
-                        PlayScreen(
-                            state = state,
-                            extra = extra,
-                            onToggle = playViewModel::togglePlay,
-                            onNext = playViewModel::next,
-                            onPrevious = playViewModel::previous,
-                            onSeek = playViewModel::seekTo,
-                            onCycleMode = playViewModel::cyclePlayMode,
-                            onBack = { navController.popBackStack() },
+                        PlayContent(
+                            navController = navController,
+                            playViewModel = playViewModel,
                             onAddToList = { addToListTarget = it },
-                            onPlayQueueAt = playViewModel::playQueueAt,
                         )
                     }
                     composable("setting") {
@@ -329,7 +320,23 @@ private fun MainScaffold(
             }
         }
     } else {
-        // ── 平板 / TV：左侧导航栏 + 右侧内容 ──
+        // ── 平板 / TV ──
+        if (currentRoute == "play") {
+            // 播放页为独立全屏页面，不显示左侧导航栏（与手机一致）；
+            // 平板显示状态栏需避让，TV 全屏沉浸不预留
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .then(if (!adaptive.isTv) Modifier.statusBarsPadding() else Modifier),
+            ) {
+                PlayContent(
+                    navController = navController,
+                    playViewModel = playViewModel,
+                    onAddToList = { addToListTarget = it },
+                )
+            }
+        } else {
+        // ── 左侧导航栏 + 右侧内容 ──
         Row(modifier = modifier.fillMaxSize()) {
             SideNavBar(
                 currentRoute = currentRoute,
@@ -346,7 +353,12 @@ private fun MainScaffold(
             Box(
                 Modifier
                     .weight(1f)
-                    .fillMaxHeight(),
+                    .fillMaxHeight()
+                    // 平板：状态栏与手势条避让（TV 全屏不预留）
+                    .then(
+                        if (!adaptive.isTv) Modifier.statusBarsPadding().navigationBarsPadding()
+                        else Modifier
+                    ),
             ) {
                 NavHost(
                     navController = navController,
@@ -414,19 +426,11 @@ private fun MainScaffold(
                         )
                     }
                     composable("play") {
-                        val state by playViewModel.playerRepository.uiState.collectAsStateWithLifecycle()
-                        val extra by playViewModel.extra.collectAsState()
-                        PlayScreen(
-                            state = state,
-                            extra = extra,
-                            onToggle = playViewModel::togglePlay,
-                            onNext = playViewModel::next,
-                            onPrevious = playViewModel::previous,
-                            onSeek = playViewModel::seekTo,
-                            onCycleMode = playViewModel::cyclePlayMode,
-                            onBack = { navController.popBackStack() },
+                        // 实际渲染走外层的独立全屏分支，这里仅注册目的地
+                        PlayContent(
+                            navController = navController,
+                            playViewModel = playViewModel,
                             onAddToList = { addToListTarget = it },
-                            onPlayQueueAt = playViewModel::playQueueAt,
                         )
                     }
                     composable("setting") {
@@ -461,6 +465,7 @@ private fun MainScaffold(
                 }
             }
         }
+        }
     }
 
     // “收藏到歌单”弹窗（选择目标歌单即收藏）
@@ -483,6 +488,29 @@ private fun navigateTab(navController: NavHostController, route: String) {
         launchSingleTop = true
         restoreState = true
     }
+}
+
+/** 播放页内容（手机 / 平板 / TV 三端共用） */
+@Composable
+private fun PlayContent(
+    navController: NavHostController,
+    playViewModel: PlayViewModel,
+    onAddToList: (MusicInfo) -> Unit,
+) {
+    val state by playViewModel.playerRepository.uiState.collectAsStateWithLifecycle()
+    val extra by playViewModel.extra.collectAsState()
+    PlayScreen(
+        state = state,
+        extra = extra,
+        onToggle = playViewModel::togglePlay,
+        onNext = playViewModel::next,
+        onPrevious = playViewModel::previous,
+        onSeek = playViewModel::seekTo,
+        onCycleMode = playViewModel::cyclePlayMode,
+        onBack = { navController.popBackStack() },
+        onAddToList = onAddToList,
+        onPlayQueueAt = playViewModel::playQueueAt,
+    )
 }
 
 /** 手机底部导航栏 */
