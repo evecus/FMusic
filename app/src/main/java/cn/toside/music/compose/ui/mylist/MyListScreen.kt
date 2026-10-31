@@ -75,6 +75,8 @@ import cn.toside.music.compose.ui.adaptive.AdaptiveInfo
 import cn.toside.music.compose.ui.adaptive.LocalAdaptive
 import cn.toside.music.compose.ui.component.LxIconButton
 import cn.toside.music.compose.ui.component.lxFocusable
+import cn.toside.music.compose.ui.component.lxMenuItem
+import cn.toside.music.compose.ui.component.lxRowFocusNav
 
 /**
  * “收藏”页（布局对齐排行榜页）：
@@ -410,7 +412,9 @@ private fun MyListSongRow(
     onMoveDown: () -> Unit,
     actions: cn.toside.music.compose.ui.component.SongRowActions,
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
+    // TV：行矩形与行尾按钮几何重叠，方向查找不可达，用显式导航（右→菜单按钮，左→回行）
+    val rowFocus = remember { FocusRequester() }
+    val moreFocus = remember { FocusRequester() }
     ListItem(
         leadingContent = {
             Text(
@@ -435,78 +439,31 @@ private fun MyListSongRow(
                 AssistChip(
                     onClick = {},
                     label = { Text(Sources.label(info.source)) },
-                    modifier = Modifier.lxFocusable(),
                 )
-                Box {
-                    LxIconButton(
-                        onClick = { menuOpen = true },
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "歌曲菜单",
-                    )
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(
-                            text = { Text("下载歌曲") },
-                            leadingIcon = { Icon(Icons.Default.Download, contentDescription = null) },
-                            onClick = {
-                                menuOpen = false
-                                actions.onDownload(info)
-                            },
-                            modifier = Modifier.lxFocusable(),
-                        )
-                        if (actions.hasMv(info)) {
-                            DropdownMenuItem(
-                                text = { Text("播放MV") },
-                                leadingIcon = { Icon(Icons.Default.Movie, contentDescription = null) },
-                                onClick = {
-                                    menuOpen = false
-                                    actions.onPlayMv(info)
-                                },
-                                modifier = Modifier.lxFocusable(),
-                            )
-                            DropdownMenuItem(
-                                text = { Text("下载MV") },
-                                leadingIcon = { Icon(Icons.Default.VideoFile, contentDescription = null) },
-                                onClick = {
-                                    menuOpen = false
-                                    actions.onDownloadMv(info)
-                                },
-                                modifier = Modifier.lxFocusable(),
-                            )
-                        }
-                        DropdownMenuItem(
-                            text = { Text("上移") },
-                            leadingIcon = { Icon(Icons.Default.ArrowUpward, contentDescription = null) },
-                            onClick = {
-                                menuOpen = false
-                                onMoveUp()
-                            },
-                            modifier = Modifier.lxFocusable(),
-                        )
-                        DropdownMenuItem(
-                            text = { Text("下移") },
-                            leadingIcon = { Icon(Icons.Default.ArrowDownward, contentDescription = null) },
-                            onClick = {
-                                menuOpen = false
-                                onMoveDown()
-                            },
-                            modifier = Modifier.lxFocusable(),
-                        )
-                        DropdownMenuItem(
-                            text = { Text("移除出歌单") },
-                            leadingIcon = { Icon(Icons.Default.Close, contentDescription = null) },
-                            onClick = {
-                                menuOpen = false
-                                onRemove()
-                            },
-                            modifier = Modifier.lxFocusable(),
-                        )
-                    }
-                }
+                cn.toside.music.compose.ui.component.SongMoreButton(
+                    info = info,
+                    actions = actions,
+                    focusRequester = moreFocus,
+                    onBackFocus = { runCatching { rowFocus.requestFocus() } },
+                    extraItems = listOf(
+                        cn.toside.music.compose.ui.component.SongExtraMenuItem(
+                            Icons.Default.ArrowUpward, "上移", onMoveUp,
+                        ),
+                        cn.toside.music.compose.ui.component.SongExtraMenuItem(
+                            Icons.Default.ArrowDownward, "下移", onMoveDown,
+                        ),
+                        cn.toside.music.compose.ui.component.SongExtraMenuItem(
+                            Icons.Default.Close, "移除出歌单", onRemove,
+                        ),
+                    ),
+                )
             }
         },
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = rowHeight)
+            .focusRequester(rowFocus)
+            .lxRowFocusNav(moreFocus)
             .clickable(onClick = onClick)
             .lxFocusable(),
     )
@@ -618,7 +575,10 @@ private fun PlaylistRow(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = "歌单菜单",
                 )
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                cn.toside.music.compose.ui.component.LxDropdownMenu(
+                    expanded = menuOpen,
+                    onDismissRequest = { menuOpen = false },
+                ) {
                     DropdownMenuItem(
                         text = { Text("重命名") },
                         leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
@@ -626,7 +586,7 @@ private fun PlaylistRow(
                             menuOpen = false
                             onRename()
                         },
-                        modifier = Modifier.lxFocusable(),
+                        modifier = Modifier.lxMenuItem(first = true),
                     )
                     DropdownMenuItem(
                         text = { Text("删除") },
@@ -635,7 +595,7 @@ private fun PlaylistRow(
                             menuOpen = false
                             onRemove()
                         },
-                        modifier = Modifier.lxFocusable(),
+                        modifier = Modifier.lxMenuItem(),
                     )
                 }
             }

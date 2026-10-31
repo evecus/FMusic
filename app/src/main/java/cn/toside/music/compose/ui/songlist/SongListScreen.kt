@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,6 +67,7 @@ import cn.toside.music.compose.ui.adaptive.AdaptiveInfo
 import cn.toside.music.compose.ui.adaptive.LocalAdaptive
 import cn.toside.music.compose.ui.component.LxIconButton
 import cn.toside.music.compose.ui.component.lxFocusable
+import cn.toside.music.compose.ui.component.lxRowFocusNav
 
 /**
  * 歌单页（对齐 mobile 版 SongList）：
@@ -865,6 +867,9 @@ private fun SongRow(
     actions: cn.toside.music.compose.ui.component.SongRowActions,
 ) {
     val adaptive = LocalAdaptive.current
+    // TV：行矩形与行尾按钮几何重叠，方向查找不可达，用显式导航（右→菜单按钮，左→回行）
+    val rowFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val moreFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     androidx.compose.material3.ListItem(
         leadingContent = {
             Text(
@@ -889,14 +894,20 @@ private fun SongRow(
                 AssistChip(
                     onClick = {},
                     label = { Text(Sources.label(info.source)) },
-                    modifier = Modifier.lxFocusable(),
                 )
-                cn.toside.music.compose.ui.component.SongMoreButton(info = info, actions = actions)
+                cn.toside.music.compose.ui.component.SongMoreButton(
+                    info = info,
+                    actions = actions,
+                    focusRequester = moreFocus,
+                    onBackFocus = { runCatching { rowFocus.requestFocus() } },
+                )
             }
         },
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = adaptive.rowHeight)
+            .focusRequester(rowFocus)
+            .lxRowFocusNav(moreFocus)
             .clickable(onClick = onClick)
             .lxFocusable(),
     )

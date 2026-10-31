@@ -48,6 +48,8 @@ import cn.toside.music.compose.data.model.Sources
 import cn.toside.music.compose.ui.adaptive.LocalAdaptive
 import cn.toside.music.compose.ui.component.LxIconButton
 import cn.toside.music.compose.ui.component.lxFocusable
+import cn.toside.music.compose.ui.component.lxRowFocusNav
+import androidx.compose.ui.focus.focusRequester
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -259,6 +261,9 @@ private fun MusicRow(
     onClick: () -> Unit,
     actions: cn.toside.music.compose.ui.component.SongRowActions,
 ) {
+    // TV：行矩形与行尾按钮几何重叠，方向查找不可达，用显式导航（右→菜单按钮，左→回行）
+    val rowFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val moreFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     androidx.compose.material3.ListItem(
         headlineContent = { Text(info.name, maxLines = 1) },
         supportingContent = {
@@ -277,11 +282,15 @@ private fun MusicRow(
                 cn.toside.music.compose.ui.component.SongMoreButton(
                     info = info,
                     actions = actions,
+                    focusRequester = moreFocus,
+                    onBackFocus = { runCatching { rowFocus.requestFocus() } },
                 )
             }
         },
         modifier = Modifier
             .fillMaxWidth()
+            .focusRequester(rowFocus)
+            .lxRowFocusNav(moreFocus)
             .clickable(onClick = onClick)
             .lxFocusable(),
     )

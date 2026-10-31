@@ -162,7 +162,7 @@ fun PlayScreen(
                     CoverSurface(
                         info = info,
                         coverUrl = extra.coverUrl,
-                        fraction = if (adaptive.isTv) 0.85f else 0.9f,
+                        fraction = if (adaptive.isTv) 0.55f else 0.65f,
                     )
                 }
                 Box(
@@ -227,6 +227,7 @@ fun PlayScreen(
                     imageVector = Icons.Default.FastRewind,
                     contentDescription = "快退 10 秒",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    compact = true,
                 )
                 LinearProgressIndicator(
                     progress = {
@@ -248,6 +249,7 @@ fun PlayScreen(
                     imageVector = Icons.Default.FastForward,
                     contentDescription = "快进 10 秒",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    compact = true,
                 )
             }
         } else {
@@ -303,7 +305,12 @@ fun PlayScreen(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            LxIconButton(onClick = onPrevious, imageVector = Icons.Default.SkipPrevious, contentDescription = "上一首")
+            LxIconButton(
+                onClick = onPrevious,
+                imageVector = Icons.Default.SkipPrevious,
+                contentDescription = "上一首",
+                compact = adaptive.twoPane,
+            )
             IconButton(
                 onClick = onToggle,
                 colors = IconButtonDefaults.filledIconButtonColors(
@@ -311,16 +318,21 @@ fun PlayScreen(
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 ),
                 modifier = Modifier
-                    .size(if (adaptive.isTv) 96.dp else 72.dp)
+                    .size(if (adaptive.isTv) 68.dp else if (adaptive.isTablet) 60.dp else 72.dp)
                     .lxFocusable(focusRequester = playFocus, shape = CircleShape),
             ) {
                 Icon(
                     imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = if (state.isPlaying) "暂停" else "播放",
-                    modifier = Modifier.size(if (adaptive.isTv) 72.dp else 56.dp),
+                    modifier = Modifier.size(if (adaptive.isTv) 44.dp else if (adaptive.isTablet) 40.dp else 56.dp),
                 )
             }
-            LxIconButton(onClick = onNext, imageVector = Icons.Default.SkipNext, contentDescription = "下一首")
+            LxIconButton(
+                onClick = onNext,
+                imageVector = Icons.Default.SkipNext,
+                contentDescription = "下一首",
+                compact = adaptive.twoPane,
+            )
         }
 
         // ── 底部功能行：LRC / 收藏 / 播放模式 / 队列 ──

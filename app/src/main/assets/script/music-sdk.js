@@ -12022,6 +12022,8 @@ ${lrclist ? lrclist.map((l) => `[${l.time}]${l.text}
               lrc: null,
               hash: item.hash,
               otherSource: null,
+              // MV hash：用于播放MV/下载MV菜单（mvhash 为空时尝试从 mvdata 中取）
+              mv: item.mvhash || (Array.isArray(item.mvdata) && item.mvdata.length > 0 ? item.mvdata[0].hash : null) || null,
               types,
               _types,
               typeUrl: {}

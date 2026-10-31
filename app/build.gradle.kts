@@ -15,30 +15,11 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        // CI 传参控制 ABI：
-        //   -PonlyArm64  → 只出 arm64-v8a（release 默认）
-        //   -PonlyArmV7a → 只出 armeabi-v7a
-        // 本地构建不带参数，保留全部 ABI 以便模拟器调试
-        when {
-            project.hasProperty("onlyArm64") -> {
-                ndk { abiFilters += "arm64-v8a" }
-            }
-            project.hasProperty("onlyArmV7a") -> {
-                ndk { abiFilters += "armeabi-v7a" }
-            }
-        }
-    }
-
-    // CI 通过环境变量注入签名信息（见 .github/workflows/release.yml）
-    // 本地没有这些变量时不配置签名，仍可正常 debug / 本地 assembleRelease（会用 debug 签名）
-    signingConfigs {
-        create("release") {
-            val storeFilePath = System.getenv("RELEASE_STORE_FILE")
-            if (!storeFilePath.isNullOrBlank()) {
-                storeFile = file(storeFilePath)
-                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
-                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
-                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+        // CI 传 -PonlyArm64 时只出 arm64（release 发布形态）；
+        // 本地构建不带该参数，保留 v7a / x86_64 以便模拟器调试
+        if (project.hasProperty("onlyArm64")) {
+            ndk {
+                abiFilters += "arm64-v8a"
             }
         }
     }
@@ -53,10 +34,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // 只有在 CI 注入了 keystore 路径时才使用 release 签名
-            if (!System.getenv("RELEASE_STORE_FILE").isNullOrBlank()) {
-                signingConfig = signingConfigs.getByName("release")
-            }
         }
         debug {
             isMinifyEnabled = false
