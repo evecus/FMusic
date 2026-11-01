@@ -15,11 +15,30 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        // CI 传 -PonlyArm64 时只出 arm64（release 发布形态）；
-        // 本地构建不带该参数，保留 v7a / x86_64 以便模拟器调试
+        // CI 传 -PonlyArm64 / -PonlyArmV7a 时只出对应 ABI（release 发布形态）；
+        // 本地构建不带该参数，保留全部 ABI 以便模拟器调试
         if (project.hasProperty("onlyArm64")) {
             ndk {
                 abiFilters += "arm64-v8a"
+            }
+        }
+        if (project.hasProperty("onlyArmV7a")) {
+            ndk {
+                abiFilters += "armeabi-v7a"
+            }
+        }
+    }
+
+    // CI 签名：密钥通过环境变量注入（release.yml 从 GitHub Secrets 解出），
+    // 本地无环境变量时自动回退为未签名，不影响日常构建
+    signingConfigs {
+        create("ci") {
+            val ksPath = System.getenv("RELEASE_STORE_FILE")
+            if (ksPath != null && file(ksPath).exists()) {
+                storeFile = file(ksPath)
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
             }
         }
     }
@@ -34,6 +53,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = if (System.getenv("RELEASE_STORE_FILE") != null) {
+                signingConfigs.getByName("ci")
+            } else {
+                null
+            }
         }
         debug {
             isMinifyEnabled = false

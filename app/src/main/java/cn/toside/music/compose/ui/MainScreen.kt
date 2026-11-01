@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Download
@@ -203,6 +204,18 @@ private fun MainScaffold(
     // “收藏到歌单”弹窗目标（搜索/排行/歌单行的收藏按钮触发）
     var addToListTarget by remember { mutableStateOf<MusicInfo?>(null) }
     val myListsState by myListViewModel.uiState.collectAsState()
+
+    // TV「退出应用」：停止播放服务（不再后台放歌）后结束应用
+    val view = LocalView.current
+    val onExitApp: () -> Unit = {
+        var ctx: android.content.Context = view.context
+        while (ctx is ContextWrapper && ctx !is Activity) ctx = ctx.baseContext
+        (ctx as? Activity)?.let { activity ->
+            val app = activity.application as cn.toside.music.compose.MusicApplication
+            app.graph.playerRepository.stopPlayback()
+            activity.finishAffinity()
+        }
+    }
 
     // 下载 / MV
     val downloadTasks by downloadViewModel.tasks.collectAsStateWithLifecycle()
@@ -398,6 +411,7 @@ private fun MainScaffold(
                 onPrevious = playViewModel::previous,
                 onNext = playViewModel::next,
                 onOpenPlay = { navController.navigate("play") { launchSingleTop = true } },
+                onExitApp = if (adaptive.isTv) onExitApp else null,
             )
             Box(
                 Modifier
@@ -649,6 +663,7 @@ private fun SideNavBar(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onOpenPlay: () -> Unit,
+    onExitApp: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val width = if (isTv) 240.dp else 200.dp
@@ -710,6 +725,56 @@ private fun SideNavBar(
                         else MaterialTheme.typography.bodyLarge,
                         color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
                         else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+
+            // TV：底部退出应用（遥控器没有返回桌面再杀后台的便利操作，
+            // 退出时停止播放服务，不在后台继续放歌）
+            if (isTv && onExitApp != null) {
+                var showExitDialog by remember { mutableStateOf(false) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { showExitDialog = true }
+                        .lxFocusable(showBorder = false)
+                        .padding(horizontal = 14.dp, vertical = if (isTv) 14.dp else 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ExitToApp,
+                        contentDescription = "退出应用",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(if (isTv) 28.dp else 24.dp),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "退出应用",
+                        style = if (isTv) MaterialTheme.typography.titleMedium
+                        else MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (showExitDialog) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showExitDialog = false },
+                        title = { Text("退出应用") },
+                        text = { Text("确定退出吗？退出后将停止歌曲播放。") },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    showExitDialog = false
+                                    onExitApp()
+                                },
+                            ) { Text("退出") }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(
+                                onClick = { showExitDialog = false },
+                            ) { Text("取消") }
+                        },
                     )
                 }
             }

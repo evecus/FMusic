@@ -136,6 +136,43 @@ class PlayerRepository(
         }
     }
 
+    /** 暂停当前歌曲（播放 MV 前调用，避免歌曲与 MV 同时出声） */
+    fun pause() {
+        scope.launch(Dispatchers.Main.immediate) {
+            controller?.pause()
+        }
+    }
+
+    /**
+     * 停止播放并释放播放服务（TV「退出应用」用）：
+     * 停止 MediaController、清空队列并停掉 PlaybackService，确保不再后台播放。
+     */
+    fun stopPlayback() {
+        scope.launch(Dispatchers.Main.immediate) {
+            controller?.let { c ->
+                runCatching {
+                    c.stop()
+                    c.clearMediaItems()
+                    c.release()
+                }
+            }
+            controller = null
+            queue.clear()
+            currentIndex = -1
+            _uiState.value = _uiState.value.copy(
+                current = null,
+                queue = emptyList(),
+                isPlaying = false,
+                loading = false,
+                positionMs = 0,
+                durationMs = 0,
+            )
+            runCatching {
+                context.stopService(android.content.Intent(context, PlaybackService::class.java))
+            }
+        }
+    }
+
     fun next() {
         if (queue.isEmpty()) return
         when (_uiState.value.playMode) {

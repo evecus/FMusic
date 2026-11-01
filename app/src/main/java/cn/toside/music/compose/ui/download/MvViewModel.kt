@@ -28,6 +28,7 @@ data class MvUiState(
 class MvViewModel(app: Application) : AndroidViewModel(app) {
 
     private val jsController = (app as MusicApplication).graph.jsController
+    private val playerRepository = (app as MusicApplication).graph.playerRepository
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private val _uiState = MutableStateFlow(MvUiState())
@@ -43,6 +44,8 @@ class MvViewModel(app: Application) : AndroidViewModel(app) {
             toast("该歌曲没有MV")
             return
         }
+        // 播放 MV 前暂停当前歌曲，避免歌曲与 MV 同时出声
+        playerRepository.pause()
         _uiState.value = MvUiState(loading = true, title = "${info.name} - ${info.singer}")
         viewModelScope.launch {
             try {
