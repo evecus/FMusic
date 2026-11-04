@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QueueMusic
@@ -97,6 +98,7 @@ fun PlayScreen(
     onCycleMode: () -> Unit,
     onBack: () -> Unit,
     onAddToList: (MusicInfo) -> Unit,
+    onDownload: (MusicInfo) -> Unit,
     onPlayQueueAt: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -352,13 +354,15 @@ fun PlayScreen(
             )
         }
 
-        // ── 控制区：TV 全部按钮合并为一行小尺寸；其他端保持三键 + 功能行 ──
+        // ── 控制区：TV 播放键居中（上一首/下一首分列两侧），功能按钮独立一行；
+        //    其他端保持三键 + 功能行 ──
         if (adaptive.isTv) {
+            // 主控制行：上一首 / 播放暂停（正中）/ 下一首
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 LxIconButton(
@@ -366,6 +370,7 @@ fun PlayScreen(
                     imageVector = Icons.Default.SkipPrevious,
                     contentDescription = "上一首",
                     compact = true,
+                    modifier = Modifier.padding(horizontal = 28.dp),
                 )
                 IconButton(
                     onClick = onToggle,
@@ -374,13 +379,13 @@ fun PlayScreen(
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     ),
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(52.dp)
                         .lxFocusable(focusRequester = playFocus, shape = CircleShape),
                 ) {
                     Icon(
                         imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (state.isPlaying) "暂停" else "播放",
-                        modifier = Modifier.size(26.dp),
+                        modifier = Modifier.size(28.dp),
                     )
                 }
                 LxIconButton(
@@ -388,11 +393,28 @@ fun PlayScreen(
                     imageVector = Icons.Default.SkipNext,
                     contentDescription = "下一首",
                     compact = true,
+                    modifier = Modifier.padding(horizontal = 28.dp),
                 )
+            }
+            // 功能行：收藏 / 下载 / 播放模式 / 播放队列
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 LxIconButton(
                     onClick = { onAddToList(info) },
                     imageVector = Icons.Default.FavoriteBorder,
                     contentDescription = "收藏到歌单",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    compact = true,
+                )
+                LxIconButton(
+                    onClick = { onDownload(info) },
+                    imageVector = Icons.Default.Download,
+                    contentDescription = "下载",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     compact = true,
                 )
@@ -478,6 +500,12 @@ fun PlayScreen(
                     onClick = { onAddToList(info) },
                     imageVector = Icons.Default.FavoriteBorder,
                     contentDescription = "收藏到歌单",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                LxIconButton(
+                    onClick = { onDownload(info) },
+                    imageVector = Icons.Default.Download,
+                    contentDescription = "下载",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 LxIconButton(

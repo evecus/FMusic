@@ -270,11 +270,14 @@ class DownloadRepository(
         try {
             downloadToFile(task, url) { tmp.outputStream() }
 
-            // 2. 写入标签 / 封面 / 内嵌歌词（失败不影响下载）
+            // 2. 写入标签 / 封面 / 内嵌歌词（失败影响提示，不中断下载）
             val settings = settingsRepository.settings.first()
             if (settings.writeTags || settings.writeCover || settings.writeEmbeddedLyric) {
                 runCatching { writeAudioMetadata(tmp, task, settings) }
-                    .onFailure { android.util.Log.w("DownloadRepository", "写入标签失败", it) }
+                    .onFailure {
+                        android.util.Log.w("DownloadRepository", "写入标签失败", it)
+                        setToast("写入歌曲信息失败：${it.message}")
+                    }
             }
 
             // 3. 落盘到最终位置
@@ -301,6 +304,10 @@ class DownloadRepository(
             // 4. 歌词文件
             if (settings.downloadLyric) {
                 runCatching { downloadLyric(task) }
+                    .onFailure {
+                        android.util.Log.w("DownloadRepository", "保存歌词文件失败", it)
+                        setToast("保存歌词文件失败：${it.message}")
+                    }
             }
         } finally {
             runCatching { tmp.delete() }

@@ -406,6 +406,7 @@ private fun MainScaffold(
                             navController = navController,
                             playViewModel = playViewModel,
                             onAddToList = { addToListTarget = it },
+                            onDownload = { downloadTarget = it },
                         )
                     }
                     composable("download") {
@@ -470,6 +471,7 @@ private fun MainScaffold(
                     navController = navController,
                     playViewModel = playViewModel,
                     onAddToList = { addToListTarget = it },
+                    onDownload = { downloadTarget = it },
                 )
             }
         } else {
@@ -591,6 +593,7 @@ private fun MainScaffold(
                             navController = navController,
                             playViewModel = playViewModel,
                             onAddToList = { addToListTarget = it },
+                            onDownload = { downloadTarget = it },
                         )
                     }
                     composable("download") {
@@ -708,6 +711,7 @@ private fun PlayContent(
     navController: NavHostController,
     playViewModel: PlayViewModel,
     onAddToList: (MusicInfo) -> Unit,
+    onDownload: (MusicInfo) -> Unit,
 ) {
     val state by playViewModel.playerRepository.uiState.collectAsStateWithLifecycle()
     val extra by playViewModel.extra.collectAsState()
@@ -721,6 +725,7 @@ private fun PlayContent(
         onCycleMode = playViewModel::cyclePlayMode,
         onBack = { navController.popBackStack() },
         onAddToList = onAddToList,
+        onDownload = onDownload,
         onPlayQueueAt = playViewModel::playQueueAt,
     )
 }
