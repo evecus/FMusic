@@ -1,9 +1,10 @@
 package com.music.fm.ui.mylist
 
-import androidx.compose.ui.focus.onFocusChanged
 import com.music.fm.ui.component.requestFocusWhenReady
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,7 +34,6 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
@@ -75,7 +75,6 @@ import com.music.fm.ui.component.LumioPagedSongPage
 import com.music.fm.ui.component.LumioSongRow
 import com.music.fm.ui.component.LxIconButton
 import com.music.fm.ui.component.lxFocusable
-import com.music.fm.ui.component.lxRowFocusNav
 import com.music.fm.ui.theme.LumioBoardCard
 import com.music.fm.ui.theme.LumioDivider
 import com.music.fm.ui.theme.LumioFontLabel
@@ -86,7 +85,8 @@ import com.music.fm.ui.theme.LumioPrimary
  *
  *  - 歌单选择：方块 Grid（手机 2 列 / 平板 3~4 列 / TV 5 列，
  *    宽高比 1.2、圆角 8、浅底 + 主色粗体居中），
- *    卡片右上角「⋯」打开居中操作弹窗（新建 / 重命名 / 删除 + 取消）；
+ *    长按卡片打开居中操作弹窗（新建 / 重命名 / 删除 + 取消；
+ *    TV 为遥控器焦点落在卡片上长按确认键）；
  *  - 点击卡片进入独立歌曲列表页：双列、每页 10 首、底部分页条，
  *    顶栏含播放全部 / 清空 / 刷新MV，返回键回歌单 Grid。
  */
@@ -485,7 +485,12 @@ private fun MyListGrid(
     }
 }
 
-/** 歌单方块卡片（对齐 Lumio CardItem）：浅底 + 主色粗体居中，右上角「⋯」打开操作弹窗 */
+/**
+ * 歌单方块卡片（对齐 Lumio CardItem）：浅底 + 主色粗体居中。
+ * 操作弹窗改为长按唤起（原右上角「⋯」已移除）：
+ * 手机 / 平板长按卡片，TV 遥控器焦点落在卡片上长按确认键。
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MyListCard(
     list: MyListMeta,
@@ -495,12 +500,10 @@ private fun MyListCard(
     incomingFocus: FocusRequester? = null,
 ) {
     val shape = RoundedCornerShape(8.dp)
-    // 卡片矩形与行尾按钮几何重叠，方向查找不可达，用显式导航（右→⋯，左→回卡片）
     val cardFocus = incomingFocus ?: remember { FocusRequester() }
-    val moreFocus = remember { FocusRequester() }
-    // 「⋯」是卡片的子节点：它聚焦时按键事件会冒泡到卡片的 lxRowFocusNav，
-    // 若不加判断，“右键 → 聚焦⋯”会把焦点又拉回⋯本身，导致焦点被锁在⋯上出不去。
-    var moreHasFocus by remember { mutableStateOf(false) }
+    // TV 长按确认键：记录按下时刻，按住 ≥600ms 判定为长按 → 弹操作弹窗，
+    // 并消费本次 KeyUp 阻止触发点击进歌单
+    var centerDownAt by remember { mutableStateOf(0L) }
 
     Box(
         modifier = modifier
@@ -509,9 +512,31 @@ private fun MyListCard(
             .clip(shape)
             .background(LumioBoardCard)
             .focusRequester(cardFocus)
-            .lxRowFocusNav(moreFocus, enabled = { !moreHasFocus })
             .lxFocusable(shape = shape)
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onMenu,
+            )
+            .onKeyEvent { event ->
+                val isCenter = event.key == Key.DirectionCenter || event.key == Key.Enter
+                when {
+                    isCenter && event.type == KeyEventType.KeyDown -> {
+                        centerDownAt = System.currentTimeMillis()
+                        false
+                    }
+                    isCenter && event.type == KeyEventType.KeyUp -> {
+                        val held = System.currentTimeMillis() - centerDownAt
+                        centerDownAt = 0L
+                        if (held >= 600) {
+                            onMenu()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    else -> false
+                }
+            }
             .aspectRatio(1.2f),
         contentAlignment = Alignment.Center,
     ) {
@@ -524,23 +549,6 @@ private fun MyListCard(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 8.dp),
-        )
-        LxIconButton(
-            onClick = onMenu,
-            imageVector = Icons.Default.MoreVert,
-            contentDescription = "歌单操作",
-            tint = LumioPrimary,
-            compact = true,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .onFocusChanged { moreHasFocus = it.hasFocus }
-                .focusRequester(moreFocus)
-                .onKeyEvent { event ->
-                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
-                        runCatching { cardFocus.requestFocus() }
-                        true
-                    } else false
-                },
         )
     }
 }

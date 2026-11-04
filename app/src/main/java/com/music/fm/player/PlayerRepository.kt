@@ -66,6 +66,14 @@ class PlayerRepository(
     private val queue = mutableListOf<MusicInfo>()
     private var currentIndex = -1
 
+    /** 换源进行中标记：防止取 URL 失败与 Media3 播放错误回调重复触发 */
+    @Volatile
+    private var togglingSource = false
+
+    /** 已自动换源过的歌曲 key：同一首歌最多自动换源一次，避免错误循环 */
+    @Volatile
+    private var lastToggledKey: String? = null
+
     init {
         connectController()
         scope.launch {
@@ -112,6 +120,12 @@ class PlayerRepository(
 
         override fun onPlayerError(error: PlaybackException) {
             _uiState.value = _uiState.value.copy(error = error.message ?: "播放失败")
+            // 播放中 URL 失效（403/下线/网络断）也触发自动换源；同一首只换一次
+            val cur = _uiState.value.current
+            if (cur != null && !togglingSource && lastToggledKey != cur.uniqueKey) {
+                lastToggledKey = cur.uniqueKey
+                playWithToggleSource(cur, _uiState.value.quality)
+            }
             syncState()
         }
     }
@@ -239,6 +253,7 @@ class PlayerRepository(
 
     private fun playCurrent() {
         val info = queue.getOrNull(currentIndex) ?: return
+        lastToggledKey = null
         _uiState.value = _uiState.value.copy(
             current = info,
             loading = true,
@@ -249,29 +264,95 @@ class PlayerRepository(
         scope.launch {
             val quality = _uiState.value.quality
             try {
-                val urlJson = withContext(Dispatchers.IO) {
-                    jsController.musicUrl(info.source, info.toJson(), quality)
-                }
-                val musicUrl = MusicUrl.parse(urlJson)
-                if (musicUrl == null || musicUrl.url.isEmpty()) {
-                    throw RuntimeException("获取播放地址失败")
-                }
-                val item = buildMediaItem(info, musicUrl)
-                val c = controller
-                withContext(Dispatchers.Main) {
-                    c?.setMediaItem(item)
-                    c?.prepare()
-                    c?.play()
-                }
+                val musicUrl = fetchMusicUrl(info, quality)
+                startPlayback(info, musicUrl)
                 _uiState.value = _uiState.value.copy(loading = false)
             } catch (e: Throwable) {
-                _uiState.value = _uiState.value.copy(
-                    loading = false,
-                    error = e.message ?: "播放失败",
-                )
+                // 自动换源（对齐 lx-music）：取播放地址失败后到其它音乐平台找同首歌重试
+                playWithToggleSource(info, quality)
             }
         }
     }
+
+    private suspend fun fetchMusicUrl(info: MusicInfo, quality: String): MusicUrl {
+        val urlJson = withContext(Dispatchers.IO) {
+            jsController.musicUrl(info.source, info.toJson(), quality)
+        }
+        val musicUrl = MusicUrl.parse(urlJson)
+        if (musicUrl == null || musicUrl.url.isEmpty()) {
+            throw RuntimeException("获取播放地址失败")
+        }
+        return musicUrl
+    }
+
+    private fun startPlayback(info: MusicInfo, url: MusicUrl) {
+        val item = buildMediaItem(info, url)
+        val c = controller
+        scope.launch(Dispatchers.Main) {
+            c?.setMediaItem(item)
+            c?.prepare()
+            c?.play()
+        }
+    }
+
+    // ── 播放失败自动换源（移植 lx-music handleGetOnlineMusicUrl + getOnlineOtherSourceMusicUrl）──
+
+    /**
+     * 换源重试流程：
+     *  1. findMusic 用「歌名 + 歌手」到其它平台搜索同首歌（SDK 内置 lx 同款匹配排序）
+     *  2. 按匹配度逐个尝试，每个平台只试一次（对齐 retryedSource 去重）
+     *  3. 成功 → 当前播放信息换成新平台的歌（队列条目不变，对齐 lx onToggleSource）
+     *  4. 全部失败 → 提示手动切歌
+     */
+    private fun playWithToggleSource(failed: MusicInfo, quality: String) {
+        if (togglingSource) return
+        togglingSource = true
+        _uiState.value = _uiState.value.copy(loading = true, error = null)
+        scope.launch {
+            try {
+                val candidatesJson = withContext(Dispatchers.IO) {
+                    jsController.findMusic(failed.toJson())
+                }
+                val candidates = parseMusicInfoArray(candidatesJson)
+                val triedSources = mutableSetOf(failed.source)
+                for (candidate in candidates) {
+                    if (candidate.source in triedSources) continue
+                    triedSources.add(candidate.source)
+                    try {
+                        val url = fetchMusicUrl(candidate, quality)
+                        _uiState.value = _uiState.value.copy(
+                            current = candidate,
+                            loading = false,
+                            error = null,
+                        )
+                        startPlayback(candidate, url)
+                        return@launch
+                    } catch (_: Throwable) {
+                        // 该平台取址失败，继续下一个候选
+                    }
+                }
+                _uiState.value = _uiState.value.copy(
+                    loading = false,
+                    error = "自动换源失败，请手动切换其他歌曲",
+                )
+            } catch (_: Throwable) {
+                _uiState.value = _uiState.value.copy(
+                    loading = false,
+                    error = "自动换源失败，请手动切换其他歌曲",
+                )
+            } finally {
+                togglingSource = false
+            }
+        }
+    }
+
+    /** 解析 findMusic 返回的候选歌曲数组 */
+    private fun parseMusicInfoArray(json: String): List<MusicInfo> = runCatching {
+        val el = Json.parseToJsonElement(json)
+        (el as? kotlinx.serialization.json.JsonArray)
+            ?.mapNotNull { (it as? JsonObject)?.let { o -> MusicInfo.parse(o) } }
+            ?: emptyList()
+    }.getOrDefault(emptyList())
 
     private fun buildMediaItem(info: MusicInfo, url: MusicUrl): MediaItem {
         val extras = Bundle().apply {
