@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.music.fm.player.PlayerUiState
@@ -37,9 +38,12 @@ fun MiniPlayer(
 ) {
     val info = state.current ?: return
     val adaptive = LocalAdaptive.current
+    // 悬浮胶囊：白底 + 圆角 + 投影，与页面背景明确区分（平板/TV 同一样式）
     Surface(
         modifier = modifier.fillMaxWidth(),
-        tonalElevation = 3.dp,
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White,
+        shadowElevation = 8.dp,
     ) {
         Column {
             Row(

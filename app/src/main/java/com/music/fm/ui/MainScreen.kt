@@ -300,13 +300,17 @@ private fun MainScaffold(
     ) {
     if (adaptive.isPhone) {
         // ── 手机：无底部导航栏；各页面左上角汉堡按钮打开抽屉导航 + 悬浮迷你播放条 ──
+        // 内容区避让手势条；迷你条悬浮在手势区上方，底部不再留一层底色
         Box(
             Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding(),
+                .statusBarsPadding(),
         ) {
-            Column(Modifier.fillMaxSize()) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .navigationBarsPadding(),
+            ) {
                 // 搜索/下载/设置无自带顶栏：补一个「汉堡 + 标题」栏
                 // （收藏/排行/歌单的汉堡集成在各自顶栏内）
                 if (showChrome) {
@@ -437,7 +441,7 @@ private fun MainScaffold(
                     }
                 }
             }
-            // 悬浮迷你播放条：贴底（下移），列表滚动区已留占位
+            // 悬浮迷你播放条：白底胶囊直接浮于页面之上（圆角与阴影在组件内）
             if (showChrome && playerState.current != null) {
                 MiniPlayer(
                     state = playerState,
@@ -445,8 +449,7 @@ private fun MainScaffold(
                     onClick = { navController.navigate("play") { launchSingleTop = true } },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(start = 28.dp, end = 28.dp, top = 8.dp, bottom = 2.dp)
-                        .clip(RoundedCornerShape(14.dp)),
+                        .padding(start = 28.dp, end = 28.dp, top = 8.dp, bottom = 10.dp),
                 )
             }
         }
@@ -635,7 +638,7 @@ private fun MainScaffold(
                         )
                     }
                 }
-                // 平板：迷你播放条悬浮在底部（与手机一致）；TV 不显示迷你条
+                // 平板：迷你播放条白底胶囊悬浮在底部（与手机一致）；TV 不显示迷你条
                 if (showChrome && !adaptive.isTv && playerState.current != null) {
                     MiniPlayer(
                         state = playerState,
@@ -643,9 +646,7 @@ private fun MainScaffold(
                         onClick = { navController.navigate("play") { launchSingleTop = true } },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(horizontal = 64.dp, vertical = 10.dp)
-                            .navigationBarsPadding()
-                            .clip(RoundedCornerShape(14.dp)),
+                            .padding(start = 64.dp, end = 64.dp, top = 10.dp, bottom = 10.dp),
                     )
                 }
             }

@@ -11252,7 +11252,7 @@ ${lrclist ? lrclist.map((l) => `[${l.time}]${l.text}
         _requestObj_hotTags: null,
         _requestObj_list: null,
         limit_list: 36,
-        limit_song: 1e4,
+        limit_song: 1e3,
         successCode: 200,
         sortList: [
           {
