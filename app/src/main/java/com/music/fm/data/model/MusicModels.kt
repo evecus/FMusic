@@ -20,7 +20,7 @@ object Sources {
     fun label(source: String): String = when (source) {
         KW -> "酷我"
         KG -> "酷狗"
-        TX -> "QQ音乐"
+        TX -> "QQ"
         WY -> "网易云"
         MG -> "咪咕"
         XM -> "虾米"
