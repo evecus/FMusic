@@ -405,6 +405,7 @@ globalThis.lx = {
     version: '',
     author: '',
     homepage: '',
+    rawScript: '',
   },
   version: '2.0.0',
   env: 'mobile',
@@ -467,27 +468,34 @@ const handleShowUpdateAlert = (data, resolve, reject) => {
 globalThis.setTimeout = _setTimeout
 globalThis.clearTimeout = _clearTimeout
 
-const freezeObject = (obj) => {
+const freezeObject = (obj, skipKey) => {
   if (typeof obj != 'object') return
   Object.freeze(obj)
-  for (const subObj of Object.values(obj)) freezeObject(subObj)
+  for (const [k, subObj] of Object.entries(obj)) {
+    // currentScriptInfo 需保持可写：lx_setup（旧模板）在脚本运行期回填真实 meta，
+    // 与 lx 原版「先填 meta 再冻结」的时序等价
+    if (k === skipKey) continue
+    freezeObject(subObj)
+  }
 }
-freezeObject(globalThis.lx)
+freezeObject(globalThis.lx, 'currentScriptInfo')
 
 // ── 旧模板兼容：lx_setup 退化为 meta 记录 shim ───────────────────
 // 旧模板：globalThis.lx_setup(key, id, name, description, version, author, homepage, rawScript)
 // 新规范下桥接已在顶层建立，此处仅记录 meta 供原生读取
 globalThis.lx_setup = (key, id, name, description, version, author, homepage, rawScript) => {
   try {
-    globalThis.lx.currentScriptInfo = {
+    // currentScriptInfo 未冻结，可回填（对齐 lx 原版暴露的字段，含 rawScript）
+    Object.assign(globalThis.lx.currentScriptInfo, {
       id: typeof id == 'string' ? id : '',
       name: typeof name == 'string' ? name : '',
       description: typeof description == 'string' ? description : '',
       version: typeof version == 'string' ? version : '',
       author: typeof author == 'string' ? author : '',
       homepage: typeof homepage == 'string' ? homepage : '',
-    }
-  } catch (e) { /* frozen */ }
+      rawScript: typeof rawScript == 'string' ? rawScript : '',
+    })
+  } catch (e) { /* ignore */ }
 }
 
 // ── 安全加固（对齐原版：禁 eval/Function、冻结全局） ──────────────

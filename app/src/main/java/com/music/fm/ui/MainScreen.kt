@@ -445,7 +445,7 @@ private fun MainScaffold(
                     onClick = { navController.navigate("play") { launchSingleTop = true } },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 2.dp)
+                        .padding(start = 28.dp, end = 28.dp, top = 8.dp, bottom = 2.dp)
                         .clip(RoundedCornerShape(14.dp)),
                 )
             }

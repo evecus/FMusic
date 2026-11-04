@@ -410,7 +410,8 @@ private fun MyListContent(
                 // 手机：单列
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    // 手机：行拉满宽度，不留左右空白
+                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
                 ) {
                     itemsIndexed(state.songs, key = { _, it -> it.uniqueKey }) { index, info ->
                         LumioSongRow(
