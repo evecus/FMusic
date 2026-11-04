@@ -187,16 +187,13 @@ private fun SearchScreenMobile(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        // ── HeaderBar：左音源 Tab + 右输入框（对齐 lx HeaderBar）──────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = adaptive.pagePadding, end = adaptive.pagePadding, top = 4.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
+        // ── HeaderBar（对齐 lx HeaderBar）──────────────────────────────────────
+        // 手机：窄屏放不下「Tab + 输入框」同一行（可横滚的 Tab 会吃掉全部宽度，
+        //       把输入框挤成细长条），因此上下两行：输入框在上、音源 Tab 在下；
+        // 平板：同一行，Tab 占剩余宽度（可横滚），输入框固定宽度靠右。
+        val sourceTabs: @Composable (Modifier) -> Unit = { tabModifier ->
             Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                modifier = tabModifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 state.enabledSources.forEach { source ->
@@ -207,14 +204,15 @@ private fun SearchScreenMobile(
                     )
                 }
             }
+        }
+        val searchField: @Composable (Modifier) -> Unit = { fieldModifier ->
             OutlinedTextField(
                 value = state.keyword,
                 onValueChange = onKeywordChange,
-                modifier = Modifier
-                    .weight(1f)
-                    .onFocusChanged { inputFocused = it.isFocused },
-                placeholder = { Text("Search for something...", fontSize = 14.sp) },
+                modifier = fieldModifier.onFocusChanged { inputFocused = it.isFocused },
+                placeholder = { Text("搜索歌曲、歌手", fontSize = 14.sp, maxLines = 1) },
                 singleLine = true,
+                shape = RoundedCornerShape(24.dp),
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
                 trailingIcon = {
                     if (state.keyword.isNotEmpty()) {
@@ -236,6 +234,28 @@ private fun SearchScreenMobile(
                     onSearch()
                 }),
             )
+        }
+
+        if (adaptive.isPhone) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = adaptive.pagePadding, end = adaptive.pagePadding, top = 4.dp, bottom = 2.dp),
+            ) {
+                searchField(Modifier.fillMaxWidth())
+                sourceTabs(Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = adaptive.pagePadding, end = adaptive.pagePadding, top = 4.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                sourceTabs(Modifier.weight(1f))
+                searchField(Modifier.width(320.dp))
+            }
         }
 
         // ── 内容区 ─────────────────────────────────────────────────────────
