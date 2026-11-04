@@ -383,6 +383,12 @@
         case 'search':
           promise = sdk[args.source].musicSearch.search(args.keyword, args.page, args.limit)
           break
+        case 'tipSearch':
+          promise = sdk[args.source].tipSearch.search(args.keyword)
+          break
+        case 'hotSearch':
+          promise = sdk[args.source].hotSearch.getList()
+          break
         case 'findMusic':
           promise = Promise.resolve(sdk.findMusic(args.musicInfo))
           break

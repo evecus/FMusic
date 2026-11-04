@@ -134,6 +134,25 @@ class UserApiController(
     fun findMusic(musicInfoJson: String): String =
         builtinRuntime.call("findMusic", musicInfoJson)
 
+    /** 搜索建议（tipSearch），返回 string[] */
+    fun tipSearch(source: String, keyword: String): String =
+        builtinRuntime.call(
+            "tipSearch",
+            JSONObject().apply {
+                put("source", source)
+                put("keyword", keyword)
+            }.toString()
+        )
+
+    /** 热门搜索，返回 string[]（部分源返回 {source, list}） */
+    fun hotSearch(source: String): String =
+        builtinRuntime.call(
+            "hotSearch",
+            JSONObject().apply {
+                put("source", source)
+            }.toString()
+        )
+
     /** 平台榜单列表（kw/kg/tx/wy/mg），返回 { list: [{id, name, bangid}], source } */
     fun getBoards(source: String): String =
         builtinRuntime.call(

@@ -17419,6 +17419,96 @@ ${result.lyric}`;
     }
   });
   require_entry();
+
+  // ── tipSearch 移植（lx-music-mobile src/utils/musicSdk/*/tipSearch.js） ──
+  // bundle 打包版本未含 tipSearch，此处以沙箱 fetch 自包含补齐（kw/kg/tx/mg 直连，
+  // wy 走 weapi：native aes-cbc 两层 + rsa NoPadding，对齐 init_wy 内 crypto 实现）
+  ;(function () {
+    const sdk = globalThis.__lx_builtin_sdk;
+    if (!sdk) return;
+    const enc = encodeURIComponent;
+    const toJson = (t) => { try { return JSON.parse(t); } catch (e) { throw new Error("响应解析失败"); } };
+    const assertOk = (resp) => {
+      if (resp.statusCode != 200) throw new Error("请求失败(" + resp.statusCode + ")");
+      return resp;
+    };
+
+    const tipSearchers = {
+      kw: {
+        async search(str) {
+          const resp = assertOk(await fetch("https://tips.kuwo.cn/t.s?corp=kuwo&newver=3&p2p=1&notrace=0&c=mbox&w=" + enc(str) + "&encoding=utf8&rformat=json", { headers: { Referer: "http://www.kuwo.cn/" } }));
+          const body = toJson(await resp.text());
+          if (!body.WORDITEMS) throw new Error("请求失败");
+          return body.WORDITEMS.map((item) => item.RELWORD);
+        },
+      },
+      kg: {
+        async search(str) {
+          const resp = assertOk(await fetch("https://searchtip.kugou.com/getSearchTip?MusicTipCount=10&keyword=" + enc(str), { headers: { referer: "https://www.kugou.com/" } }));
+          const body = toJson(await resp.text());
+          // lx 原版 createHttpFetch 返回的 body 已是响应 JSON 的 data 字段
+          const records = (body.data || body)[0].RecordDatas;
+          return records.map((info) => info.HintInfo);
+        },
+      },
+      tx: {
+        async search(str) {
+          const resp = assertOk(await fetch("https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg?is_xml=0&format=json&key=" + enc(str) + "&loginUin=0&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0", { headers: { Referer: "https://y.qq.com/portal/player.html" } }));
+          const body = toJson(await resp.text());
+          if (body.code != 0) throw new Error("请求失败");
+          return body.data.song.itemlist.map((info) => info.name + " - " + info.singer);
+        },
+      },
+      mg: {
+        async search(str) {
+          const resp = assertOk(await fetch("https://music.migu.cn/v3/api/search/suggest?keyword=" + enc(str), { headers: { referer: "https://music.migu.cn/v3" } }));
+          const body = toJson(await resp.text());
+          return body.songs.map((info) => info.name + " - " + info.singerName);
+        },
+      },
+      wy: {
+        // weapi：对齐 init_wy 内 crypto.js（aes-128-cbc 两层 + rsa NoPadding）
+        _b62: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        _pubKey: "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7clFSs6sXqHauqKWqdtLkF2KexO40H1YTX8z2lSgBBOAxLsvaklV8k4cBFK9snQXE9/DDaFt6Rr7iVZMldczhC0JNgTz+SHXT6CBHuX3e9SdB1Ua44oncaTWz7OBGLbCiK45wIDAQAB",
+        _aesEnc(b64Data, keyStr, ivStr) {
+          return globalThis.__lx_native_call__utils_aes_encrypt(b64Data, Buffer.from(keyStr).toString("base64"), Buffer.from(ivStr).toString("base64"), "CBC_128_PKCS7Padding");
+        },
+        _weapi(object) {
+          const text = JSON.stringify(object);
+          const base62 = this._b62;
+          const secretKey = Buffer.from(Array.from({ length: 16 }, () => base62.charAt(Math.floor(Math.random() * 62))));
+          const iv = "0102030405060708";
+          // 层1：text → base64 → aes-cbc(presetKey)
+          const p1 = this._aesEnc(Buffer.from(text).toString("base64"), "0CoJUm6Qyw8W8jud", iv);
+          // 层2：p1 字符串本身作为字节 → aes-cbc(secretKey)
+          const params = this._aesEnc(Buffer.from(p1, "utf8").toString("base64"), secretKey.toString("latin1"), iv);
+          // encSecKey：secretKey 反转后左侧补零至 128 字节，rsa NoPadding → hex
+          const reversed = Array.from(secretKey).reverse();
+          const padded = Buffer.concat([Buffer.alloc(128 - reversed.length), Buffer.from(reversed)]);
+          const encSecKey = Buffer.from(globalThis.__lx_native_call__utils_rsa_encrypt(padded.toString("base64"), this._pubKey, "RSA/ECB/NoPadding"), "base64").toString("hex");
+          return { params, encSecKey };
+        },
+        async search(str) {
+          const form = this._weapi({ s: str });
+          const resp = assertOk(await fetch("https://music.163.com/weapi/search/suggest/web", {
+            method: "post",
+            headers: {
+              referer: "https://music.163.com/",
+              origin: "https://music.163.com/",
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: "params=" + enc(form.params) + "&encSecKey=" + enc(form.encSecKey),
+          }));
+          const body = toJson(await resp.text());
+          if (body.code != 200) throw new Error("请求失败");
+          return body.result.songs.map((info) => info.name + " - " + (info.artists || []).map((a) => a.name).join("、"));
+        },
+      },
+    };
+    for (const src of Object.keys(tipSearchers)) {
+      if (sdk[src]) sdk[src].tipSearch = tipSearchers[src];
+    }
+  })();
 })();
 /*! Bundled license information:
 
