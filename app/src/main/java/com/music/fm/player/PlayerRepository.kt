@@ -44,6 +44,8 @@ data class PlayerUiState(
     val currentIndex: Int = -1,
     val loading: Boolean = false,
     val error: String? = null,
+    /** 状态提示（如「尝试切换到其他来源...」，对齐 lx setStatusText） */
+    val statusText: String? = null,
     val quality: String = Qualitys.Q128,
 )
 
@@ -69,6 +71,10 @@ class PlayerRepository(
     /** 换源进行中标记：防止取 URL 失败与 Media3 播放错误回调重复触发 */
     @Volatile
     private var togglingSource = false
+
+    /** 播放请求序号：切歌后旧请求的异步结果一律丢弃（对齐 lx diffCurrentMusicInfo） */
+    @Volatile
+    private var playToken = 0L
 
     /** 已自动换源过的歌曲 key：同一首歌最多自动换源一次，避免错误循环 */
     @Volatile
@@ -254,10 +260,13 @@ class PlayerRepository(
     private fun playCurrent() {
         val info = queue.getOrNull(currentIndex) ?: return
         lastToggledKey = null
+        togglingSource = false
+        val token = ++playToken
         _uiState.value = _uiState.value.copy(
             current = info,
             loading = true,
             error = null,
+            statusText = null,
             queue = queue.toList(),
             currentIndex = currentIndex,
         )
@@ -265,11 +274,13 @@ class PlayerRepository(
             val quality = _uiState.value.quality
             try {
                 val musicUrl = fetchMusicUrl(info, quality)
+                if (token != playToken) return@launch
                 startPlayback(info, musicUrl)
                 _uiState.value = _uiState.value.copy(loading = false)
             } catch (e: Throwable) {
+                if (token != playToken) return@launch
                 // 自动换源（对齐 lx-music）：取播放地址失败后到其它音乐平台找同首歌重试
-                playWithToggleSource(info, quality)
+                playWithToggleSource(info, quality, token)
             }
         }
     }
@@ -304,46 +315,80 @@ class PlayerRepository(
      *  3. 成功 → 当前播放信息换成新平台的歌（队列条目不变，对齐 lx onToggleSource）
      *  4. 全部失败 → 提示手动切歌
      */
-    private fun playWithToggleSource(failed: MusicInfo, quality: String) {
+    private fun playWithToggleSource(failed: MusicInfo, quality: String, token: Long = playToken) {
         if (togglingSource) return
         togglingSource = true
-        _uiState.value = _uiState.value.copy(loading = true, error = null)
+        _uiState.value = _uiState.value.copy(
+            loading = true,
+            error = null,
+            statusText = "尝试切换到其他来源...",
+        )
         scope.launch {
             try {
                 val candidatesJson = withContext(Dispatchers.IO) {
                     jsController.findMusic(failed.toJson())
                 }
+                if (token != playToken) return@launch
                 val candidates = parseMusicInfoArray(candidatesJson)
                 val triedSources = mutableSetOf(failed.source)
                 for (candidate in candidates) {
+                    if (token != playToken) return@launch
                     if (candidate.source in triedSources) continue
                     triedSources.add(candidate.source)
-                    try {
-                        val url = fetchMusicUrl(candidate, quality)
-                        _uiState.value = _uiState.value.copy(
-                            current = candidate,
-                            loading = false,
-                            error = null,
-                        )
-                        startPlayback(candidate, url)
-                        return@launch
-                    } catch (_: Throwable) {
-                        // 该平台取址失败，继续下一个候选
+                    // 对齐 lx getPlayQuality：候选平台不支持目标音质时降级
+                    for (q in candidateQualities(candidate, quality)) {
+                        try {
+                            val url = fetchMusicUrl(candidate, q)
+                            if (token != playToken) return@launch
+                            // 换源成功：标记已换过，避免新地址再失败时与 onPlayerError 循环
+                            lastToggledKey = candidate.uniqueKey
+                            _uiState.value = _uiState.value.copy(
+                                current = candidate,
+                                loading = false,
+                                error = null,
+                                statusText = null,
+                            )
+                            startPlayback(candidate, url)
+                            return@launch
+                        } catch (_: Throwable) {
+                            // 该音质取址失败，降级重试 / 继续下一个候选平台
+                        }
                     }
                 }
-                _uiState.value = _uiState.value.copy(
-                    loading = false,
-                    error = "自动换源失败，请手动切换其他歌曲",
-                )
+                if (token == playToken) {
+                    _uiState.value = _uiState.value.copy(
+                        loading = false,
+                        error = "自动换源失败，请手动切换其他歌曲",
+                        statusText = null,
+                    )
+                }
             } catch (_: Throwable) {
-                _uiState.value = _uiState.value.copy(
-                    loading = false,
-                    error = "自动换源失败，请手动切换其他歌曲",
-                )
+                if (token == playToken) {
+                    _uiState.value = _uiState.value.copy(
+                        loading = false,
+                        error = "自动换源失败，请手动切换其他歌曲",
+                        statusText = null,
+                    )
+                }
             } finally {
-                togglingSource = false
+                if (token == playToken) togglingSource = false
             }
         }
+    }
+
+    /**
+     * 候选歌曲的取址音质顺序（对齐 lx getPlayQuality）：
+     * 目标音质 → 候选平台支持的更低高品质 → 128k 兜底，去重。
+     */
+    private fun candidateQualities(candidate: MusicInfo, wanted: String): List<String> {
+        val tryList = listOf(Qualitys.FLAC24, Qualitys.FLAC, Qualitys.Q320)
+        val supported = (candidate.raw["_types"] as? JsonObject)?.keys ?: emptySet()
+        val picked = if (wanted in tryList) {
+            tryList.drop(tryList.indexOf(wanted)).firstOrNull { it in supported } ?: Qualitys.Q128
+        } else {
+            wanted
+        }
+        return listOf(picked, Qualitys.Q128).distinct()
     }
 
     /** 解析 findMusic 返回的候选歌曲数组 */

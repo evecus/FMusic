@@ -353,6 +353,14 @@ fun PlayScreen(
                 maxLines = 1,
             )
         }
+        state.statusText?.let { tip ->
+            Text(
+                tip,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+            )
+        }
 
         // ── 控制区：TV 播放键居中（上一首/下一首分列两侧），功能按钮独立一行；
         //    其他端保持三键 + 功能行 ──

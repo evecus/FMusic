@@ -17348,19 +17348,29 @@ ${result.lyric}`;
         }
         return Promise.all(tasks);
       };
+      // 与 lx-music-mobile src/utils/musicSdk/index.js 的 searchMusic + findMusic 逐行对齐
       findMusic = async (musicInfo) => {
         const { name, singer, albumName, interval, source: s } = musicInfo;
-        const tasks = [];
+        const trimStr0 = (str) => typeof str == "string" ? str.trim() : str;
+        const musicName0 = trimStr0(name);
+        const searchTasks = [];
+        const excludeSource = ["xm"];
+        for (const source of sources.sources) {
+          if (!sources[source.id].musicSearch || source.id == s || excludeSource.includes(source.id)) continue;
+          searchTasks.push(sources[source.id].musicSearch.search(`${musicName0} ${singer || ""}`.trim(), 1, 25).catch((_) => null));
+        }
+        const lists = (await Promise.all(searchTasks)).filter((s2) => s2 && Array.isArray(s2.list));
         const singersRxp = /、|&|;|；|\/|,|，|\|/;
-        const sortSingle = (singer2) => singersRxp.test(singer2) ? singer2.split(singersRxp).sort((a, b) => a.localeCompare(b)).join("\u3001") : singer2;
+        const sortSingle = (singer2) => singersRxp.test(singer2) ? singer2.split(singersRxp).sort((a, b) => a.localeCompare(b)).join("、") : singer2 || "";
         const sortMusic = (arr, callback) => {
           const tempResult = [];
           for (let i = arr.length - 1; i > -1; i--) {
             const item = arr[i];
             if (callback(item)) {
-              delete item.sortedSinger;
-              delete item.lowerCaseName;
-              delete item.lowerCaseAlbumName;
+              delete item.fSinger;
+              delete item.fMusicName;
+              delete item.fAlbumName;
+              delete item.fInterval;
               tempResult.push(item);
               arr.splice(i, 1);
             }
@@ -17368,39 +17378,68 @@ ${result.lyric}`;
           tempResult.reverse();
           return tempResult;
         };
-        const trimStr = (str) => typeof str == "string" ? str.trim() : str;
-        const filterStr = (str) => typeof str == "string" ? str.replace(/\s|'|\.|,|，|&|"|、|\(|\)|（|）|`|~|-|<|>|\||\/|\]|\[/g, "") : str;
-        const musicName = trimStr(name);
-        const sortedSinger = filterStr(String(sortSingle(singer)).toLowerCase());
-        const lowerCaseName = filterStr(String(musicName).toLowerCase());
-        const lowerCaseAlbumName = filterStr(String(albumName).toLowerCase());
-        const excludeSource = ["xm"];
-        for (const source of sources.sources) {
-          if (!sources[source.id].musicSearch || source.id == s || excludeSource.includes(source.id)) continue;
-          tasks.push(sources[source.id].musicSearch.search(`${musicName} ${singer || ""}`.trim(), 1, 25).then((res) => {
-            for (const item of res.list) {
-              item.name = trimStr(item.name);
-              item.sortedSinger = filterStr(String(sortSingle(item.singer)).toLowerCase());
-              item.lowerCaseName = filterStr(String(item.name ?? "").toLowerCase());
-              item.lowerCaseAlbumName = filterStr(String(item.albumName ?? "").toLowerCase());
-              if (item.sortedSinger == sortedSinger && item.lowerCaseName == lowerCaseName || (interval ? item.interval == interval : true) && item.lowerCaseName == lowerCaseName && (item.sortedSinger.includes(sortedSinger) || sortedSinger.includes(item.sortedSinger)) || item.lowerCaseName == lowerCaseName && (lowerCaseAlbumName ? item.lowerCaseAlbumName == lowerCaseAlbumName : true) && (interval ? item.interval == interval : true) || item.lowerCaseName == lowerCaseName && (lowerCaseAlbumName ? item.lowerCaseAlbumName == lowerCaseAlbumName : true) && (item.sortedSinger.includes(sortedSinger) || sortedSinger.includes(item.sortedSinger))) {
-                return item;
-              }
+        const getIntv = (interval2) => {
+          if (!interval2) return 0;
+          if (typeof interval2 != "string") return Number(interval2) || 0;
+          let intvArr = interval2.split(":");
+          let intv = 0;
+          let unit = 1;
+          while (intvArr.length) {
+            intv += parseInt(intvArr.pop()) * unit;
+            unit *= 60;
+          }
+          return intv || 0;
+        };
+        const trimStr = (str) => typeof str == "string" ? str.trim() : str || "";
+        const filterStr = (str) => typeof str == "string" ? str.replace(/\s|'|\.|,|，|&|"|、|\(|\)|（|）|`|~|-|<|>|\||\/|\]|\[|!|！/g, "") : String(str || "");
+        const fMusicName = filterStr(name).toLowerCase();
+        const fSinger = filterStr(sortSingle(singer)).toLowerCase();
+        const fAlbumName = filterStr(albumName).toLowerCase();
+        const fInterval = getIntv(interval);
+        const isEqualsInterval = (intv) => Math.abs((fInterval || intv) - (intv || fInterval)) < 5;
+        const isIncludesName = (name2) => fMusicName.includes(name2) || name2.includes(fMusicName);
+        const isIncludesSinger = (singer2) => fSinger ? fSinger.includes(singer2) || singer2.includes(fSinger) : true;
+        const isEqualsAlbum = (album) => fAlbumName ? fAlbumName == album : true;
+        const result = lists.map((source) => {
+          for (const item of source.list) {
+            item.name = trimStr(item.name);
+            item.singer = trimStr(item.singer);
+            item.fSinger = filterStr(sortSingle(item.singer).toLowerCase());
+            item.fMusicName = filterStr(String(item.name ?? "").toLowerCase());
+            item.fAlbumName = filterStr(String(item.albumName ?? "").toLowerCase());
+            item.fInterval = getIntv(item.interval);
+            if (!isEqualsInterval(item.fInterval)) {
+              item.name = null;
+              continue;
             }
-            return null;
-          }).catch((_) => null));
-        }
-        const result = (await Promise.all(tasks)).filter((s2) => s2);
+            if (item.fMusicName == fMusicName && isIncludesSinger(item.fSinger)) return item;
+          }
+          for (const item of source.list) {
+            if (item.name == null) continue;
+            if (item.fSinger == fSinger && isIncludesName(item.fMusicName)) return item;
+          }
+          for (const item of source.list) {
+            if (item.name == null) continue;
+            if (isEqualsAlbum(item.fAlbumName) && isIncludesSinger(item.fSinger) && isIncludesName(item.fMusicName)) return item;
+          }
+          return null;
+        }).filter((s2) => s2);
         const newResult = [];
         if (result.length) {
-          newResult.push(...sortMusic(result, (item) => item.sortedSinger == sortedSinger && item.lowerCaseName == lowerCaseName && item.interval == interval));
-          newResult.push(...sortMusic(result, (item) => item.lowerCaseName == lowerCaseName && item.sortedSinger == sortedSinger && item.lowerCaseAlbumName == lowerCaseAlbumName));
-          newResult.push(...sortMusic(result, (item) => item.sortedSinger == sortedSinger && item.lowerCaseName == lowerCaseName));
-          newResult.push(...sortMusic(result, (item) => item.sortedSinger == sortedSinger && item.interval == interval));
+          newResult.push(...sortMusic(result, (item) => item.fSinger == fSinger && item.fMusicName == fMusicName && item.interval == interval));
+          newResult.push(...sortMusic(result, (item) => item.fMusicName == fMusicName && item.fSinger == fSinger && item.fAlbumName == fAlbumName));
+          newResult.push(...sortMusic(result, (item) => item.fSinger == fSinger && item.fMusicName == fMusicName));
+          newResult.push(...sortMusic(result, (item) => item.fMusicName == fMusicName && item.interval == interval));
+          newResult.push(...sortMusic(result, (item) => item.fSinger == fSinger && item.interval == interval));
+          newResult.push(...sortMusic(result, (item) => item.interval == interval));
+          newResult.push(...sortMusic(result, (item) => item.fMusicName == fMusicName));
+          newResult.push(...sortMusic(result, (item) => item.fSinger == fSinger));
+          newResult.push(...sortMusic(result, (item) => item.fAlbumName == fAlbumName));
           for (const item of result) {
-            delete item.sortedSinger;
-            delete item.lowerCaseName;
-            delete item.lowerCaseAlbumName;
+            delete item.fSinger;
+            delete item.fMusicName;
+            delete item.fAlbumName;
+            delete item.fInterval;
           }
           newResult.push(...result);
         }
