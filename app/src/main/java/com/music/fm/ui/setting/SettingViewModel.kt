@@ -9,6 +9,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.music.fm.MusicApplication
 import com.music.fm.data.AppSettings
 import com.music.fm.data.DisplayMode
+import com.music.fm.data.LxmcCodec
+import com.music.fm.data.LxmcParseResult
 import com.music.fm.data.SettingsRepository
 import com.music.fm.data.UserScript
 import com.music.fm.data.UserScriptRepository
@@ -28,6 +30,8 @@ data class SettingUiState(
     val scripts: List<UserScript> = emptyList(),
     val message: String? = null,
     val importing: Boolean = false,
+    /** 已解析、等待用户确认的列表导入 */
+    val pendingListImport: LxmcParseResult? = null,
 )
 
 class SettingViewModel(app: Application) : AndroidViewModel(app) {
@@ -187,6 +191,137 @@ class SettingViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setQuality(quality: String) {
         viewModelScope.launch { settingsRepository.setDefaultQuality(quality) }
+    }
+
+    // ── 备份与恢复（列表导入 / 导出，lx .lxmc 互通） ──────────────
+
+    private suspend fun buildLxmcText(): String {
+        val all = graph.myListRepository.snapshotAll()
+        // 与 lx 导出一致：不导出空的默认列表；FM 的「喜欢」始终导出
+        return LxmcCodec.encode(all)
+    }
+
+    /** 导出到 SAF 选定的 uri（手机 / 平板） */
+    fun exportListsToUri(uri: Uri) {
+        viewModelScope.launch {
+            runCatching {
+                val text = buildLxmcText()
+                withContext(Dispatchers.IO) {
+                    getApplication<Application>().contentResolver.openOutputStream(uri, "wt")
+                        ?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                        ?: throw IllegalArgumentException("无法写入文件")
+                }
+            }.onSuccess {
+                _uiState.value = _uiState.value.copy(message = "列表导出成功")
+            }.onFailure { e ->
+                _uiState.value = _uiState.value.copy(message = "导出失败：${e.message}")
+            }
+        }
+    }
+
+    /** 导出到系统「下载/FMusic」目录（TV 无 SAF 保存界面） */
+    fun exportListsToDownloads() {
+        viewModelScope.launch {
+            runCatching {
+                val text = buildLxmcText()
+                withContext(Dispatchers.IO) { saveToDownloads(text) }
+            }.onSuccess { name ->
+                _uiState.value = _uiState.value.copy(message = "已导出到 下载/FMusic/$name")
+            }.onFailure { e ->
+                _uiState.value = _uiState.value.copy(message = "导出失败：${e.message}")
+            }
+        }
+    }
+
+    private fun saveToDownloads(text: String): String {
+        val ctx = getApplication<Application>()
+        val stamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
+            .format(java.util.Date())
+        val name = "fm_list_$stamp.lxmc"
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
+                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
+                put(
+                    android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                    android.os.Environment.DIRECTORY_DOWNLOADS + "/FMusic",
+                )
+            }
+            val uri = ctx.contentResolver.insert(
+                android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values,
+            ) ?: throw IllegalStateException("无法创建文件")
+            ctx.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                ?: throw IllegalStateException("无法写入文件")
+        } else {
+            val dir = java.io.File(
+                android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_DOWNLOADS,
+                ),
+                "FMusic",
+            )
+            if (!dir.exists() && !dir.mkdirs()) throw IllegalStateException("无法创建目录")
+            java.io.File(dir, name).writeBytes(bytes)
+        }
+        return name
+    }
+
+    /** 读取并解析备份文件（SAF uri），解析成功后等待用户确认 */
+    fun prepareListImport(uri: Uri) = prepareListImportInternal {
+        getApplication<Application>().contentResolver.openInputStream(uri)
+            ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+            ?: throw IllegalArgumentException("无法读取文件")
+    }
+
+    /** 读取并解析备份文件（本地路径，TV 文件选择页） */
+    fun prepareListImportFromFile(path: String) = prepareListImportInternal {
+        val f = java.io.File(path)
+        if (!f.isFile || !f.canRead()) throw IllegalArgumentException("无法读取文件")
+        f.readText(Charsets.UTF_8)
+    }
+
+    private fun prepareListImportInternal(reader: () -> String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(importing = true, message = null)
+            runCatching {
+                val text = withContext(Dispatchers.IO) { reader() }
+                LxmcCodec.decode(text.removePrefix("\uFEFF"))
+            }.onSuccess { parsed ->
+                _uiState.value = if (parsed.lists.isEmpty()) {
+                    _uiState.value.copy(message = "文件中没有可导入的列表")
+                } else {
+                    _uiState.value.copy(pendingListImport = parsed)
+                }
+            }.onFailure { e ->
+                _uiState.value = _uiState.value.copy(message = "导入失败：${e.message}")
+            }
+            _uiState.value = _uiState.value.copy(importing = false)
+        }
+    }
+
+    fun confirmListImport() {
+        val pending = _uiState.value.pendingListImport ?: return
+        _uiState.value = _uiState.value.copy(pendingListImport = null)
+        viewModelScope.launch {
+            runCatching { graph.myListRepository.importLists(pending.lists) }
+                .onSuccess { r ->
+                    val extra = buildString {
+                        if (r.truncated) append("，部分歌单超出 2000 首已截断")
+                        if (r.listsSkipped > 0) append("，${r.listsSkipped} 个歌单因数量上限被跳过")
+                        if (pending.skippedSongs > 0) append("，${pending.skippedSongs} 首不支持的歌曲(如本地歌曲)已忽略")
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        message = "已导入 ${r.lists} 个列表，共 ${r.songs} 首歌曲$extra",
+                    )
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(message = "导入失败：${e.message}")
+                }
+        }
+    }
+
+    fun cancelListImport() {
+        _uiState.value = _uiState.value.copy(pendingListImport = null)
     }
 
     /** 屏幕层直接投递提示消息（如 TV 无文件选择器的兜底提示） */

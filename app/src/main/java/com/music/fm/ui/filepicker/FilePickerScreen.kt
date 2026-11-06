@@ -1,6 +1,24 @@
 package com.music.fm.ui.filepicker
 
 import java.io.File
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,9 +66,11 @@ import com.music.fm.ui.component.lxFocusable
  *  - 选中 .js 后通过 [onFileSelected] 返回绝对路径。
  */
 @Composable
-fun FilePickerScreen(
+private fun FilePickerContent(
     onFileSelected: (String) -> Unit,
     onDismiss: () -> Unit,
+    extensions: Set<String> = setOf("js"),
+    title: String = "选择音源脚本文件",
     modifier: Modifier = Modifier,
 ) {
     val adaptive = LocalAdaptive.current
@@ -75,7 +95,7 @@ fun FilePickerScreen(
         val dirs = mutableListOf<File>()
         val files = mutableListOf<File>()
         currentDir.listFiles()?.forEach { f ->
-            if (f.isDirectory) dirs += f else if (f.extension.equals("js", true)) files += f
+            if (f.isDirectory) dirs += f else if (extensions.any { f.extension.equals(it, true) }) files += f
         }
         dirs.sortedBy { it.name.lowercase() } + files.sortedBy { it.name.lowercase() }
     }
@@ -89,7 +109,7 @@ fun FilePickerScreen(
 
     Column(modifier = modifier.fillMaxSize().padding(horizontal = adaptive.pagePadding, vertical = 12.dp)) {
         // 标题 + 当前路径
-        Text("选择音源脚本文件", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text(
             currentDir.absolutePath,
             style = MaterialTheme.typography.bodySmall,
@@ -120,7 +140,7 @@ fun FilePickerScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "此目录下没有可导入的 .js 文件",
+                    "此目录下没有可导入的 ${extensions.joinToString(" / ") { ".$it" }} 文件",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -184,4 +204,96 @@ private fun formatSize(bytes: Long): String = when {
     bytes < 1024 -> "$bytes B"
     bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024f)
     else -> "%.1f MB".format(bytes / 1024f / 1024f)
+}
+
+
+/** 是否已有读取外部存储（浏览任意目录）的权限 */
+private fun hasStoragePermission(ctx: Context): Boolean =
+    if (Build.VERSION.SDK_INT >= 30) {
+        Environment.isExternalStorageManager()
+    } else {
+        ContextCompat.checkSelfPermission(
+            ctx, Manifest.permission.READ_EXTERNAL_STORAGE,
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+/**
+ * TV 端本地文件选择页入口：先确认存储权限，未授权时显示说明与授权按钮，
+ * 授权后（从系统设置页返回时自动重新检查）进入目录浏览。
+ */
+@Composable
+fun FilePickerScreen(
+    onFileSelected: (String) -> Unit,
+    onDismiss: () -> Unit,
+    extensions: Set<String> = setOf("js"),
+    title: String = "选择音源脚本文件",
+    modifier: Modifier = Modifier,
+) {
+    val ctx = LocalContext.current
+    var granted by remember { mutableStateOf(hasStoragePermission(ctx)) }
+    var hint by remember { mutableStateOf<String?>(null) }
+
+    // 从系统授权页 / 权限弹窗返回后重新检查
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) granted = hasStoragePermission(ctx)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted = hasStoragePermission(ctx) }
+
+    if (granted) {
+        FilePickerContent(onFileSelected, onDismiss, extensions, title, modifier)
+        return
+    }
+
+    val adaptive = LocalAdaptive.current
+    val authFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { authFocus.requestFocus() } }
+
+    Column(
+        modifier = modifier.fillMaxSize()
+            .padding(horizontal = adaptive.pagePadding, vertical = 24.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "需要「文件访问」权限才能浏览并选择本地文件。授权后请返回本页，将自动继续。",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        hint?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+        Spacer(Modifier.height(20.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(
+                onClick = {
+                    if (Build.VERSION.SDK_INT >= 30) {
+                        val pkg = Uri.parse("package:${ctx.packageName}")
+                        val ok = runCatching {
+                            ctx.startActivity(
+                                Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, pkg),
+                            )
+                        }.isSuccess || runCatching {
+                            ctx.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                        }.isSuccess
+                        if (!ok) hint = "无法打开系统授权页，请在系统设置 → 应用 → FMusic → 权限 中手动开启文件访问"
+                    } else {
+                        permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                    }
+                },
+                modifier = Modifier.lxFocusable(focusRequester = authFocus, shape = RoundedCornerShape(50)),
+            ) { Text("去授权") }
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier.lxFocusable(shape = RoundedCornerShape(50)),
+            ) { Text("返回") }
+        }
+    }
 }

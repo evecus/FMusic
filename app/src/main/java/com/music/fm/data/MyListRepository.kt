@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.music.fm.data.model.MusicInfo
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -224,6 +225,59 @@ class MyListRepository(private val context: Context) {
             }
         }
         return existed
+    }
+
+    // ── 备份与恢复 ───────────────────────────────────────────────
+
+    /** 导出用快照：喜欢 + 全部自建/收藏歌单（含空歌单） */
+    suspend fun snapshotAll(): List<ExportList> {
+        val prefs = context.myListStore.data.first()
+        val metas = builtinLists() + parseUserMetas(prefs[Keys.META])
+        return metas.map { m ->
+            ExportList(m.id, m.name, m.sourceListId, parseSongs(prefs[Keys.songs(m.id)]))
+        }
+    }
+
+    data class ImportReport(
+        val lists: Int,
+        val songs: Int,
+        val truncated: Boolean,
+        val listsSkipped: Int,
+    )
+
+    /**
+     * 导入列表（对齐 lx 导入：同 id 覆盖，其余新建）。
+     * 覆盖时保留本地已有的歌单名；超出 [MAX_LISTS]/[MAX_SONGS_PER_LIST] 的部分被丢弃并在报告中标记。
+     */
+    suspend fun importLists(incoming: List<ImportList>): ImportReport {
+        var listCount = 0
+        var songCount = 0
+        var truncated = false
+        var skippedLists = 0
+        mutex.withLock {
+            context.myListStore.edit { prefs ->
+                val user = parseUserMetas(prefs[Keys.META]).toMutableList()
+                for (item in incoming) {
+                    val isLove = item.id == LOVE_ID
+                    if (!isLove) {
+                        val idx = user.indexOfFirst { it.id == item.id }
+                        if (idx < 0) {
+                            if (user.size >= MAX_LISTS) { skippedLists++; continue }
+                            user += MyListMeta(item.id, item.name, false, item.sourceListId)
+                        }
+                    }
+                    val songs = if (item.songs.size > MAX_SONGS_PER_LIST) {
+                        truncated = true
+                        item.songs.take(MAX_SONGS_PER_LIST)
+                    } else item.songs
+                    prefs[Keys.songs(item.id)] = songsToJson(songs)
+                    listCount++
+                    songCount += songs.size
+                }
+                prefs[Keys.META] = JsonArray(user.map { metaToJson(it) }).toString()
+            }
+        }
+        return ImportReport(listCount, songCount, truncated, skippedLists)
     }
 
     // ── 序列化 ───────────────────────────────────────────────────

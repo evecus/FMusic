@@ -43,8 +43,9 @@ private val Context.downloadsDataStore: DataStore<Preferences> by preferencesDat
  *  - 单任务队列串行下载，带进度 / 速度上报
  *  - 歌曲：取 URL（经音源脚本）→ 下载 → 可选写 .lrc 歌词
  *  - MV：wy/kg 内置直链 → 下载 mp4
- *  - 存储：API 29+ 写入公共媒体库（Music/FMusic、Movies/FMusic，无需权限）；
- *          API 24-28 写入应用外部私有目录（Music/、Movies/）
+ *  - 存储：直接写公共目录 /sdcard/Music/fmusic（歌曲、歌词）与 /sdcard/Movie/fmusic（MV），
+ *          不使用应用私有目录；需要存储权限（见 [StorageAccess]），缺权限时通过
+ *          [permissionRequests] 通知界面去申请，任务标记失败可重试
  *  - 任务列表持久化，重启后未完成任务标记为失败可重试
  */
 class DownloadRepository(
@@ -69,11 +70,24 @@ class DownloadRepository(
         .followRedirects(true)
         .build()
 
-    private val songDir: File by lazy {
-        File(context.getExternalFilesDir(null), "Music").apply { mkdirs() }
-    }
-    private val mvDir: File by lazy {
-        File(context.getExternalFilesDir(null), "Movies").apply { mkdirs() }
+    private val songDir: File get() = StorageAccess.musicDir
+    private val mvDir: File get() = StorageAccess.movieDir
+
+    /** 缺少存储权限时发出，界面层收到后去申请授权 */
+    private val _permissionRequests = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
+    )
+    val permissionRequests: kotlinx.coroutines.flow.SharedFlow<Unit> = _permissionRequests
+
+    private fun ensureTargetDir(dir: File) {
+        if (!StorageAccess.hasAccess(context)) {
+            _permissionRequests.tryEmit(Unit)
+            throw IllegalStateException("需要文件访问权限，授权后请点击重试")
+        }
+        if (!dir.isDirectory && !dir.mkdirs()) {
+            throw IllegalStateException("无法创建下载目录：${dir.absolutePath}")
+        }
     }
 
     init {
@@ -298,26 +312,11 @@ class DownloadRepository(
                     }
             }
 
-            // 3. 落盘到最终位置
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val uri = insertMediaStore(
-                    task, MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
-                    1, "Music/FMusic", audioMime(task.quality),
-                ) ?: throw IllegalStateException("创建下载文件失败")
-                try {
-                    context.contentResolver.openOutputStream(uri)?.use { out ->
-                        tmp.inputStream().use { it.copyTo(out) }
-                    } ?: throw IllegalStateException("无法写入文件")
-                    finishMediaStore(uri)
-                } catch (e: Throwable) {
-                    runCatching { context.contentResolver.delete(uri, null, null) }
-                    throw e
-                }
-            } else {
-                val file = File(songDir, task.fileName)
-                tmp.copyTo(file, overwrite = true)
-                scanFile(file)
-            }
+            // 3. 落盘到 /sdcard/Music/fmusic
+            ensureTargetDir(songDir)
+            val file = File(songDir, task.fileName)
+            tmp.copyTo(file, overwrite = true)
+            scanFile(file)
 
             // 4. 歌词文件
             if (settings.downloadLyric && lyricContent != null) {
@@ -418,28 +417,15 @@ class DownloadRepository(
         val url = com.music.fm.data.model.MusicUrl.parse(urlJson)?.url
             ?: throw IllegalStateException("获取MV下载地址失败")
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val uri = insertMediaStore(
-                task, MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
-                null, "Movies/FMusic", "video/mp4",
-            ) ?: throw IllegalStateException("创建下载文件失败")
-            try {
-                downloadToFile(task, url) { contentOut(uri) }
-                finishMediaStore(uri)
-            } catch (e: Throwable) {
-                runCatching { context.contentResolver.delete(uri, null, null) }
-                throw e
-            }
-        } else {
-            val file = File(mvDir, task.fileName)
-            try {
-                downloadToFile(task, url) { file.outputStream() }
-            } catch (e: Throwable) {
-                runCatching { file.delete() }
-                throw e
-            }
-            scanFile(file)
+        ensureTargetDir(mvDir)
+        val file = File(mvDir, task.fileName)
+        try {
+            downloadToFile(task, url) { file.outputStream() }
+        } catch (e: Throwable) {
+            runCatching { file.delete() }
+            throw e
         }
+        scanFile(file)
         update(task.id) { it.copy(status = DownloadStatus.COMPLETED, percent = 1f, speed = "") }
         setToast("${task.fileName} MV下载完成!")
     }
@@ -497,36 +483,6 @@ class DownloadRepository(
         }
     }
 
-    // ── MediaStore（API 29+ 公共媒体库） ─────────────────────────
-
-    private fun insertMediaStore(
-        task: DownloadTask,
-        collection: Uri,
-        isMusic: Int?,
-        relativePath: String,
-        mime: String,
-    ): Uri? {
-        val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, task.fileName)
-            put(MediaStore.MediaColumns.MIME_TYPE, mime)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.MediaColumns.RELATIVE_PATH, relativePath)
-                put(MediaStore.MediaColumns.IS_PENDING, 1)
-            }
-            isMusic?.let { put(MediaStore.Audio.AudioColumns.IS_MUSIC, it) }
-        }
-        return context.contentResolver.insert(collection, values)
-    }
-
-    private fun contentOut(uri: Uri): OutputStream =
-        context.contentResolver.openOutputStream(uri)
-            ?: throw IllegalStateException("无法写入文件")
-
-    private fun finishMediaStore(uri: Uri) {
-        val values = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
-        runCatching { context.contentResolver.update(uri, values, null, null) }
-    }
-
     /** 取歌词并按 lx 规则合并翻译 / 罗马音；取不到歌词时抛错（对齐 lx「未获取到可写入的歌词」） */
     private suspend fun fetchMergedLyric(task: DownloadTask, withRoma: Boolean): String =
         withContext(Dispatchers.IO) {
@@ -538,29 +494,26 @@ class DownloadRepository(
             merged
         }
 
+    /** 歌词与歌曲同目录同名（.lrc） */
     private suspend fun downloadLyric(task: DownloadTask, lyric: String) = withContext(Dispatchers.IO) {
         val baseName = task.fileName.substringBeforeLast('.')
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val values = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, "$baseName.lrc")
-                put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
-                put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/FMusic")
-                put(MediaStore.MediaColumns.IS_PENDING, 1)
-            }
-            val uri = context.contentResolver.insert(
-                MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values,
-            ) ?: return@withContext
-            context.contentResolver.openOutputStream(uri)?.use { it.write(lyric.toByteArray()) }
-            finishMediaStore(uri)
-        } else {
-            File(songDir, "$baseName.lrc").writeText(lyric)
-        }
+        ensureTargetDir(songDir)
+        val file = File(songDir, "$baseName.lrc")
+        file.writeText(lyric)
+        scanFile(file)
     }
 
     private fun scanFile(file: File) {
         runCatching {
             val paths = arrayOf(file.absolutePath)
-            val mimes = arrayOf(if (file.name.endsWith(".mp4")) "video/mp4" else "audio/mpeg")
+            val mimes = arrayOf(
+                when (file.extension.lowercase()) {
+                    "mp4" -> "video/mp4"
+                    "flac" -> "audio/flac"
+                    "lrc" -> "text/plain"
+                    else -> "audio/mpeg"
+                },
+            )
             android.media.MediaScannerConnection.scanFile(context, paths, mimes, null)
         }
     }

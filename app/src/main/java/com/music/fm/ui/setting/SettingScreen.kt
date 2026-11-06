@@ -82,6 +82,13 @@ fun SettingScreen(
     onSetWriteRomaLyric: (Boolean) -> Unit,
     onSetWriteEmbeddedLyric: (Boolean) -> Unit,
     onNotifyMessage: (String) -> Unit,
+    onExportLists: (android.net.Uri) -> Unit,
+    onExportListsToDownloads: () -> Unit,
+    onImportLists: (android.net.Uri) -> Unit,
+    onConfirmListImport: () -> Unit,
+    onCancelListImport: () -> Unit,
+    /** TV 端导入列表走自建文件选择页；null 时走系统 SAF */
+    onOpenListFilePicker: (() -> Unit)? = null,
     /** TV 端走自建文件选择页；null 时走系统 SAF（手机 / 平板） */
     onOpenFilePicker: (() -> Unit)? = null,
     onConsumeMessage: () -> Unit,
@@ -93,6 +100,12 @@ fun SettingScreen(
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let(onImport) }
+    val importListLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let(onImportLists) }
+    val exportListLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { uri -> uri?.let(onExportLists) }
 
     LaunchedEffect(state.message) {
         val msg = state.message ?: return@LaunchedEffect
@@ -274,7 +287,7 @@ fun SettingScreen(
                 Text("下载", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "下载歌曲与 MV 的默认设置；文件保存在公共媒体库的 Music/FMusic 与 Movies/FMusic 目录。",
+                    "下载歌曲与 MV 的默认设置；歌曲保存到 /sdcard/Music/fmusic，MV 保存到 /sdcard/Movie/fmusic（需授予文件访问权限）。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -346,6 +359,54 @@ fun SettingScreen(
 
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
 
+                Text("备份与恢复", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "导入 / 导出「收藏」中的列表，备份文件格式（.lxmc）与 lx-music 互通。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            if (onOpenListFilePicker != null) {
+                                onOpenListFilePicker()
+                            } else {
+                                runCatching { importListLauncher.launch(arrayOf("*/*")) }
+                                    .onFailure { onNotifyMessage("当前设备没有可用的文件选择器") }
+                            }
+                        },
+                        enabled = !state.importing,
+                        modifier = Modifier.lxFocusable(shape = CircleShape),
+                    ) { Text("导入列表") }
+                    OutlinedButton(
+                        onClick = {
+                            if (adaptive.isTv) {
+                                onExportListsToDownloads()
+                            } else {
+                                runCatching { exportListLauncher.launch("fm_list.lxmc") }
+                                    .onFailure { onNotifyMessage("当前设备没有可用的文件选择器") }
+                            }
+                        },
+                        enabled = !state.importing,
+                        modifier = Modifier.lxFocusable(shape = CircleShape),
+                    ) { Text("导出列表") }
+                }
+                if (adaptive.isTv) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "TV 端导出的文件保存在 下载/FMusic 目录。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+
                 Text("关于", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -363,6 +424,47 @@ fun SettingScreen(
         SnackbarHost(
             snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+
+    state.pendingListImport?.let { pending ->
+        val songCount = pending.lists.sumOf { it.songs.size }
+        AlertDialog(
+            onDismissRequest = onCancelListImport,
+            title = { Text("导入列表") },
+            text = {
+                Column {
+                    Text("将导入 ${pending.lists.size} 个列表，共 $songCount 首歌曲：")
+                    Spacer(Modifier.height(8.dp))
+                    pending.lists.take(8).forEach {
+                        Text(
+                            "· ${it.name}（${it.songs.size}）",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    if (pending.lists.size > 8) {
+                        Text("… 等 ${pending.lists.size} 个", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "与现有列表 ID 相同的将被覆盖（保留本地列表名）。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = onConfirmListImport,
+                    modifier = Modifier.lxFocusable(shape = CircleShape),
+                ) { Text("导入") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = onCancelListImport,
+                    modifier = Modifier.lxFocusable(shape = CircleShape),
+                ) { Text("取消") }
+            },
         )
     }
 

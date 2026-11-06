@@ -446,6 +446,11 @@ private fun MainScaffold(
                             onSetWriteRomaLyric = settingViewModel::setWriteRomaLyric,
                             onSetWriteEmbeddedLyric = settingViewModel::setWriteEmbeddedLyric,
                             onNotifyMessage = settingViewModel::notifyMessage,
+                            onExportLists = settingViewModel::exportListsToUri,
+                            onExportListsToDownloads = settingViewModel::exportListsToDownloads,
+                            onImportLists = settingViewModel::prepareListImport,
+                            onConfirmListImport = settingViewModel::confirmListImport,
+                            onCancelListImport = settingViewModel::cancelListImport,
                             onConsumeMessage = settingViewModel::consumeMessage,
                         )
                     }
@@ -626,6 +631,17 @@ private fun MainScaffold(
                             onDismiss = { navController.popBackStack() },
                         )
                     }
+                    composable("filepicker_list") {
+                        com.music.fm.ui.filepicker.FilePickerScreen(
+                            onFileSelected = { path ->
+                                settingViewModel.prepareListImportFromFile(path)
+                                navController.popBackStack()
+                            },
+                            onDismiss = { navController.popBackStack() },
+                            extensions = setOf("lxmc", "json"),
+                            title = "选择列表备份文件（.lxmc）",
+                        )
+                    }
                     composable("setting") {
                         val state by settingViewModel.uiState.collectAsState()
                         SettingScreen(
@@ -645,6 +661,16 @@ private fun MainScaffold(
                             onSetWriteRomaLyric = settingViewModel::setWriteRomaLyric,
                             onSetWriteEmbeddedLyric = settingViewModel::setWriteEmbeddedLyric,
                             onNotifyMessage = settingViewModel::notifyMessage,
+                            onExportLists = settingViewModel::exportListsToUri,
+                            onExportListsToDownloads = settingViewModel::exportListsToDownloads,
+                            onImportLists = settingViewModel::prepareListImport,
+                            onConfirmListImport = settingViewModel::confirmListImport,
+                            onCancelListImport = settingViewModel::cancelListImport,
+                            onOpenListFilePicker = if (adaptive.isTv) {
+                                {
+                                    navController.navigate("filepicker_list") { launchSingleTop = true }
+                                }
+                            } else null,
                             onOpenFilePicker = if (adaptive.isTv) {
                                 {
                                     navController.navigate("filepicker") { launchSingleTop = true }
