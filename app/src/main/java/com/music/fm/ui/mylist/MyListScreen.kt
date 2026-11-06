@@ -243,7 +243,7 @@ private fun MyListContent(
                     )
                 }
                 Text(
-                    text = "我的列表",
+                    text = "收藏",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier

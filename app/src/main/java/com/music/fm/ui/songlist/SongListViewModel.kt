@@ -225,7 +225,7 @@ class SongListViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * 「收藏歌单」：后台循环拉取歌单全部分页歌曲（对齐 mobile 版 getListDetailAll：
-     * 首页拿 total/limit 算页数，逐页拉完去重），然后整单创建到「收藏」页我的列表
+     * 首页拿 total/limit 算页数，逐页拉完去重），然后整单创建到「收藏」页
      * （与内置列表同级，歌单名同原歌单，对齐 mobile 版 createList）。
      * 已收藏过同源歌单时全量覆盖同步（对齐 syncSourceList）。
      */
@@ -254,8 +254,8 @@ class SongListViewModel(app: Application) : AndroidViewModel(app) {
                             name, "${source}__${detail.id}", songs,
                         )
                         toast(
-                            if (existed) "「$name」已在我的列表，已同步最新歌曲"
-                            else "已收藏到我的列表「$name」",
+                            if (existed) "「$name」已在收藏，已同步最新歌曲"
+                            else "已添加到收藏「$name」",
                         )
                     }
                 },

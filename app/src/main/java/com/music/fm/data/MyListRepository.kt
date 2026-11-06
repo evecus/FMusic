@@ -193,7 +193,7 @@ class MyListRepository(private val context: Context) {
     }
 
     /**
-     * 收藏在线歌单到我的列表（对齐 mobile 版 handleCollect → createList）：
+     * 收藏在线歌单到收藏（对齐 mobile 版 handleCollect → createList）：
      * 以 [sourceListId]（形如 `kw__xxxx`）查重——
      * 已存在则用 [songs] 全量覆盖该歌单（syncSourceList 同步语义），返回 true；
      * 不存在则新建同名歌单（与内置列表同级）并写入全部歌曲，返回 false。

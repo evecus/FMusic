@@ -46,12 +46,12 @@ import com.music.fm.ui.theme.LumioFontLabel
 import com.music.fm.ui.theme.LumioPrimary
 
 /**
- * Lumio TV 独立歌曲列表页（歌单详情 / 排行榜 / 我的列表 共用）：
+ * Lumio TV 独立歌曲列表页（歌单详情 / 排行榜 / 收藏 共用）：
  *
  *  - 顶栏：返回 + 居中标题「【名称】｜副标题」+ 右侧操作图标；
  *  - 歌曲双列显示，每页 10 首（5 行 × 2 列），行样式为统一 [LumioSongRow]；
  *  - 底部分页条：「‹ 页码 ›」，遥控器左右键聚焦翻页按钮；
- *  - 遥控器返回键回到原歌单 / 排行榜 / 我的列表页面。
+ *  - 遥控器返回键回到原歌单 / 排行榜 / 收藏页面。
  */
 @Composable
 fun LumioPagedSongPage(
