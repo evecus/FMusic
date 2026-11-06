@@ -336,11 +336,17 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun parseStringList(json: String): List<String> {
         val out = mutableListOf<String>()
-        val arr: JSONArray = runCatching {
-            JSONObject(json).optJSONArray("list") ?: JSONArray(json)
-        }.getOrElse { return emptyList() }
+        // tipSearch 返回纯数组 JSON，hotSearch 部分源返回 {source, list}：
+        // 先按实际类型解析（JSONObject(纯数组) 会抛异常，不能把数组解析放在它的回退里）
+        val arr: JSONArray = when (val v = runCatching { org.json.JSONTokener(json).nextValue() }.getOrNull()) {
+            is JSONArray -> v
+            is JSONObject -> v.optJSONArray("list") ?: return emptyList()
+            else -> return emptyList()
+        }
         for (i in 0 until arr.length()) {
-            val v = arr.opt(i)?.toString() ?: continue
+            val item = arr.opt(i)
+            if (item == null || item == JSONObject.NULL) continue
+            val v = item.toString()
             if (v.isNotBlank()) out.add(v)
         }
         return out
