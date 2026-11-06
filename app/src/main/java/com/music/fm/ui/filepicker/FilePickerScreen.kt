@@ -35,7 +35,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.Icon
@@ -44,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,11 +57,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.music.fm.ui.adaptive.LocalAdaptive
 import com.music.fm.ui.component.lxFocusable
+import com.music.fm.ui.component.requestFocusWhenReady
 
 /**
  * TV 端本地文件选择页（音源脚本导入用）。
  * TV 系统普遍没有 SAF 文件选择器，这里自建目录浏览器：
  *  - 列出内置存储 / U 盘根目录，逐级浏览，只显示目录和 .js 文件；
+ *  - 无界面「上级目录」行：遥控器物理返回键逐级回退，退无可退时关闭本页；
  *  - 所有行遥控器可聚焦、OK 键点击，进入目录自动聚焦首行；
  *  - 选中 .js 后通过 [onFileSelected] 返回绝对路径。
  */
@@ -90,21 +92,41 @@ private fun FilePickerContent(
         }.ifEmpty { listOf(File("/")) }
     }
     var currentDir by remember { mutableStateOf(roots.first()) }
+    // 浏览历史：物理返回键逐级回退，退无可退时关闭本页
+    val history = remember { mutableStateListOf<File>() }
+    fun goTo(dir: File) {
+        history.add(currentDir)
+        currentDir = dir
+    }
 
-    val entries = remember(currentDir) {
+    val atRoot = roots.any { it.absolutePath == currentDir.absolutePath }
+    val entries = remember(currentDir, atRoot) {
         val dirs = mutableListOf<File>()
         val files = mutableListOf<File>()
         currentDir.listFiles()?.forEach { f ->
             if (f.isDirectory) dirs += f else if (extensions.any { f.extension.equals(it, true) }) files += f
         }
-        dirs.sortedBy { it.name.lowercase() } + files.sortedBy { it.name.lowercase() }
+        // 根目录直接列出其它存储挂载点（U 盘等）：隐藏「上级目录」行后仍可切换存储
+        val otherRoots = if (atRoot) {
+            roots.filter { it.absolutePath != currentDir.absolutePath && it.isDirectory && it.canRead() }
+        } else emptyList()
+        otherRoots + dirs.sortedBy { it.name.lowercase() } + files.sortedBy { it.name.lowercase() }
     }
-    val atRoot = roots.any { it.absolutePath == currentDir.absolutePath }
 
-    // 进入目录后自动聚焦首行，遥控器有起点
+    // 物理返回键完全替代界面「上级目录」：先回浏览历史，空了再关闭本页。
+    // 显式调用 onDismiss 退出，不依赖 NavHost 的默认返回处理。
+    androidx.activity.compose.BackHandler {
+        if (history.isNotEmpty()) {
+            currentDir = history.removeAt(history.lastIndex)
+        } else {
+            onDismiss()
+        }
+    }
+
+    // 进入目录后自动聚焦首行，遥控器有起点（LazyColumn 条目延迟组合，逐帧重试）
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(currentDir) {
-        runCatching { firstFocus.requestFocus() }
+        firstFocus.requestFocusWhenReady()
     }
 
     Column(modifier = modifier.fillMaxSize().padding(horizontal = adaptive.pagePadding, vertical = 12.dp)) {
@@ -120,20 +142,6 @@ private fun FilePickerContent(
         )
         Spacer(Modifier.height(10.dp))
 
-        if (!atRoot || currentDir.parentFile != null) {
-            PickerRow(
-                icon = Icons.AutoMirrored.Filled.ArrowBack,
-                iconTint = MaterialTheme.colorScheme.secondary,
-                title = "上级目录",
-                subtitle = currentDir.parentFile?.absolutePath ?: "/",
-                focusRequester = if (entries.isEmpty()) firstFocus else null,
-                onClick = {
-                    val parent = currentDir.parentFile
-                    if (parent != null && parent.canRead()) currentDir = parent else onDismiss()
-                },
-            )
-        }
-
         when {
             entries.isEmpty() -> Box(
                 Modifier.fillMaxWidth().padding(vertical = 48.dp),
@@ -142,6 +150,10 @@ private fun FilePickerContent(
                 Text(
                     "此目录下没有可导入的 ${extensions.joinToString(" / ") { ".$it" }} 文件",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // 空目录没有列表行，把焦点落在提示文字上，保证遥控器有起点
+                    modifier = Modifier
+                        .focusRequester(firstFocus)
+                        .lxFocusable(shape = RoundedCornerShape(8.dp)),
                 )
             }
             else -> LazyColumn(state = rememberLazyListState(), modifier = Modifier.fillMaxSize()) {
@@ -151,11 +163,15 @@ private fun FilePickerContent(
                         icon = if (isDir) Icons.Default.Folder else Icons.Default.Description,
                         iconTint = if (isDir) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
                         title = entry.name,
-                        subtitle = if (isDir) "目录" else formatSize(entry.length()),
+                        subtitle = when {
+                            atRoot && roots.contains(entry) -> "存储根目录"
+                            isDir -> "目录"
+                            else -> formatSize(entry.length())
+                        },
                         focusRequester = if (index == 0) firstFocus else null,
                         onClick = {
                             if (isDir) {
-                                currentDir = entry
+                                goTo(entry)
                             } else {
                                 onFileSelected(entry.absolutePath)
                             }
@@ -290,10 +306,13 @@ fun FilePickerScreen(
                 },
                 modifier = Modifier.lxFocusable(focusRequester = authFocus, shape = RoundedCornerShape(50)),
             ) { Text("去授权") }
-            OutlinedButton(
-                onClick = onDismiss,
-                modifier = Modifier.lxFocusable(shape = RoundedCornerShape(50)),
-            ) { Text("返回") }
+            // TV 不显示界面返回按钮：遥控器物理返回键直接退出本页
+            if (!adaptive.isTv) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.lxFocusable(shape = RoundedCornerShape(50)),
+                ) { Text("返回") }
+            }
         }
     }
 }

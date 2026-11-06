@@ -117,7 +117,7 @@ fun LeaderboardScreen(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        // TV 详情视图是独立歌曲页（自带顶栏与返回键），不显示音源 Tab 行
+        // TV 详情视图是独立歌曲页（自带顶栏、无界面返回键，遥控器返回键回 Grid），不显示音源 Tab 行
         val showTopBar = showBoardGrid || !adaptive.isTv
 
         // ══ 顶部栏 ══
@@ -197,7 +197,7 @@ fun LeaderboardScreen(
                     .fillMaxWidth(),
             )
         } else if (adaptive.isTv) {
-            // TV：独立双列分页歌曲页（每页 10 首，返回键回榜单 Grid）
+            // TV：独立双列分页歌曲页（每页 10 首，遥控器返回键回榜单 Grid）
             val pageSize = 10
             var page by remember(state.currentBoard?.id) { mutableStateOf(0) }
             val start = page * pageSize

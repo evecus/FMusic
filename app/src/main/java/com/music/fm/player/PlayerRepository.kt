@@ -164,7 +164,7 @@ class PlayerRepository(
     }
 
     /**
-     * 停止播放并释放播放服务（TV「退出应用」用）：
+     * 停止播放并释放播放服务（TV 连按两次返回键退出应用时用）：
      * 停止 MediaController、清空队列并停掉 PlaybackService，确保不再后台播放。
      */
     fun stopPlayback() {

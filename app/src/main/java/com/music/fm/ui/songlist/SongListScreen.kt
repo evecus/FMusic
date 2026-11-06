@@ -125,7 +125,7 @@ fun SongListScreen(
     if (detail != null) {
         val adaptive = LocalAdaptive.current
         if (adaptive.isTv) {
-            // TV：独立双列分页歌曲页（每页 10 首，返回键回歌单网格）
+            // TV：独立双列分页歌曲页（每页 10 首，遥控器返回键回歌单网格）
             SongListTvPagedDetail(
                 detail = detail,
                 onBack = onCloseDetail,
@@ -700,7 +700,7 @@ private fun PlaylistCard(
 
 // ── 详情视图：歌单信息 + 统一歌曲行 ─────────────────────────────────────────
 
-/** TV 详情：独立双列分页歌曲页（每页 10 首，返回键回歌单网格） */
+/** TV 详情：独立双列分页歌曲页（每页 10 首，遥控器返回键回歌单网格） */
 @Composable
 private fun SongListTvPagedDetail(
     detail: SongListDetailState,

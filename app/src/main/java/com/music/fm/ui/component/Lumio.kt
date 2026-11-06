@@ -206,11 +206,14 @@ fun LumioSongRow(
     rankColor: Color? = null,
     showSourceBadge: Boolean = true,
     extraItems: List<SongExtraMenuItem> = emptyList(),
+    /** 外部焦点请求器：进入页面时可直接把焦点落到本行；null 时使用内部默认 */
+    focusRequester: FocusRequester? = null,
 ) {
     val adaptive = com.music.fm.ui.adaptive.LocalAdaptive.current
     val height = if (rowHeight != Dp.Unspecified) rowHeight else adaptive.rowHeight
     // TV：行矩形与行尾按钮几何重叠，方向查找不可达，用显式导航（右→菜单按钮，左→回行）
-    val rowFocus = remember { FocusRequester() }
+    val internalRowFocus = remember { FocusRequester() }
+    val rowFocus = focusRequester ?: internalRowFocus
     val moreFocus = remember { FocusRequester() }
     val mainShape = RoundedCornerShape(6.dp)
 

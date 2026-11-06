@@ -90,7 +90,7 @@ import com.music.fm.ui.theme.LumioPrimary
  *    长按卡片打开居中操作弹窗（新建 / 重命名 / 删除 + 取消；
  *    TV 为遥控器焦点落在卡片上长按确认键）；
  *  - 点击卡片进入独立歌曲列表页：双列、每页 10 首、底部分页条，
- *    顶栏含播放全部 / 清空 / 刷新MV，返回键回歌单 Grid。
+ *    顶栏含播放全部 / 清空 / 刷新MV，遥控器返回键回歌单 Grid（无界面返回按钮）。
  */
 @Composable
 fun MyListScreen(
@@ -273,7 +273,7 @@ private fun MyListContent(
             )
         }
     } else if (adaptive.isTv) {
-        // TV 独立歌曲列表页：双列、每页 10 首、底部分页、返回键回 Grid（全屏无侧栏）
+        // TV 独立歌曲列表页：双列、每页 10 首、底部分页、遥控器返回键回 Grid（全屏无侧栏）
         val pageSize = 10
         var page by remember(state.activeListId) { mutableStateOf(0) }
         val start = page * pageSize

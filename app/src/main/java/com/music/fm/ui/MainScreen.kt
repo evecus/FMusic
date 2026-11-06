@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Download
@@ -37,7 +36,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
@@ -102,6 +100,7 @@ import com.music.fm.ui.setting.SettingViewModel
 import com.music.fm.ui.songlist.SongListScreen
 import com.music.fm.ui.songlist.SongListViewModel
 import com.music.fm.ui.theme.FMusicTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private data class NavTab(val route: String, val label: String, val icon: ImageVector)
@@ -225,7 +224,7 @@ private fun MainScaffold(
     var myListShowGrid by remember { mutableStateOf(true) }
     var leaderboardShowGrid by remember { mutableStateOf(true) }
 
-    // TV「退出应用」：停止播放服务（不再后台放歌）后结束应用
+    // TV 连按两次返回键退出：停止播放服务（不再后台放歌）后结束应用
     val view = LocalView.current
     val onExitApp: () -> Unit = {
         var ctx: android.content.Context = view.context
@@ -252,6 +251,28 @@ private fun MainScaffold(
     }
 
     val adaptive = LocalAdaptive.current
+
+    // TV：连按两次返回键退出应用（第一次提示，2 秒内再按则停止播放并退出）。
+    // 注册在 MainScaffold 最外层：各页面 / NavHost 的 BackHandler 更内层，优先消费返回键，
+    // 只有回到导航根页面、没有其它返回目标时才会走到这里。
+    var exitHintVisible by remember { mutableStateOf(false) }
+    var lastExitBackAt by remember { mutableStateOf(0L) }
+    LaunchedEffect(exitHintVisible) {
+        if (exitHintVisible) {
+            delay(2000L)
+            exitHintVisible = false
+        }
+    }
+    BackHandler(enabled = adaptive.isTv) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (exitHintVisible && now - lastExitBackAt <= 2000L) {
+            onExitApp()
+        } else {
+            lastExitBackAt = now
+            exitHintVisible = true
+        }
+    }
+
     // 播放页为独立全屏页面：不显示导航与迷你播放条
     val showChrome = currentRoute !in chromelessRoutes
     val isSideNav = !adaptive.isPhone
@@ -293,12 +314,10 @@ private fun MainScaffold(
             ) {
                 NavDrawerContent(
                     currentRoute = currentRoute,
-                    showExit = adaptive.isPhone,
                     onSelect = { route ->
                         scope.launch { drawerState.close() }
                         navigateTab(navController, route)
                     },
-                    onExitApp = onExitApp,
                 )
             }
         },
@@ -505,7 +524,6 @@ private fun MainScaffold(
                     onPrevious = playViewModel::previous,
                     onNext = playViewModel::next,
                     onOpenPlay = { navController.navigate("play") { launchSingleTop = true } },
-                    onExitApp = if (adaptive.isTv) onExitApp else null,
                 )
             }
             Box(
@@ -734,6 +752,31 @@ private fun MainScaffold(
             },
         )
     }
+
+    // TV 连按两次返回：底部浮层提示（不抢焦点、不拦截按键，2 秒后自动消失）
+    if (adaptive.isTv && exitHintVisible) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 72.dp),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                shape = RoundedCornerShape(28.dp),
+                tonalElevation = 6.dp,
+                shadowElevation = 6.dp,
+            ) {
+                Text(
+                    "再按一次退出APP",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp),
+                )
+            }
+        }
+    }
 }
 
 private fun navigateTab(navController: NavHostController, route: String) {
@@ -793,14 +836,12 @@ private fun ChromeTopBar(title: String, onMenu: () -> Unit) {
 
 /**
  * 抽屉导航内容（对齐 lx-music 侧栏）：
- * 顶部品牌区 + 导航项（点击进入对应页面并关闭抽屉）+ 底部退出应用（手机）。
+ * 顶部品牌区 + 导航项（点击进入对应页面并关闭抽屉）。
  */
 @Composable
 private fun NavDrawerContent(
     currentRoute: String,
-    showExit: Boolean,
     onSelect: (String) -> Unit,
-    onExitApp: (() -> Unit)?,
 ) {
     Column(Modifier.fillMaxHeight()) {
         // 品牌头部
@@ -859,54 +900,6 @@ private fun NavDrawerContent(
         }
 
         Spacer(Modifier.weight(1f))
-
-        // 退出应用（手机端，对齐 lx-music 侧栏底部）
-        if (showExit && onExitApp != null) {
-            var showExitDialog by remember { mutableStateOf(false) }
-            HorizontalDivider()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { showExitDialog = true }
-                    .padding(horizontal = 14.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ExitToApp,
-                    contentDescription = "退出",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.width(14.dp))
-                Text(
-                    "退出应用",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (showExitDialog) {
-                androidx.compose.material3.AlertDialog(
-                    onDismissRequest = { showExitDialog = false },
-                    title = { Text("退出应用") },
-                    text = { Text("确定退出吗？退出后将停止歌曲播放。") },
-                    confirmButton = {
-                        androidx.compose.material3.TextButton(
-                            onClick = {
-                                showExitDialog = false
-                                onExitApp()
-                            },
-                        ) { Text("退出") }
-                    },
-                    dismissButton = {
-                        androidx.compose.material3.TextButton(
-                            onClick = { showExitDialog = false },
-                        ) { Text("取消") }
-                    },
-                )
-            }
-            Spacer(Modifier.navigationBarsPadding())
-        }
     }
 }
 
@@ -928,7 +921,6 @@ private fun SideNavBar(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onOpenPlay: () -> Unit,
-    onExitApp: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val width = if (isTv) 160.dp else 200.dp
@@ -983,58 +975,6 @@ private fun SideNavBar(
                         else MaterialTheme.typography.bodyLarge,
                         color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
                         else MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            }
-
-            // TV：底部退出应用（遥控器没有返回桌面再杀后台的便利操作，
-            // 退出时停止播放服务，不在后台继续放歌）
-            if (isTv && onExitApp != null) {
-                var showExitDialog by remember { mutableStateOf(false) }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 2.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .lxFocusable(shape = RoundedCornerShape(12.dp))
-                        .clickable { showExitDialog = true }
-                        .padding(horizontal = 14.dp, vertical = if (isTv) 14.dp else 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ExitToApp,
-                        contentDescription = "退出",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(if (isTv) 28.dp else 24.dp),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        "退出",
-                        style = if (isTv) MaterialTheme.typography.titleMedium
-                        else MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (showExitDialog) {
-                    androidx.compose.material3.AlertDialog(
-                        onDismissRequest = { showExitDialog = false },
-                        title = { Text("退出应用") },
-                        text = { Text("确定退出吗？退出后将停止歌曲播放。") },
-                        confirmButton = {
-                            androidx.compose.material3.TextButton(
-                                onClick = {
-                                    showExitDialog = false
-                                    onExitApp()
-                                },
-                                modifier = Modifier.lxFocusable(shape = CircleShape),
-                            ) { Text("退出") }
-                        },
-                        dismissButton = {
-                            androidx.compose.material3.TextButton(
-                                onClick = { showExitDialog = false },
-                                modifier = Modifier.lxFocusable(shape = CircleShape),
-                            ) { Text("取消") }
-                        },
                     )
                 }
             }

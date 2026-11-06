@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.music.fm.data.model.MusicInfo
+import com.music.fm.ui.adaptive.LocalAdaptive
 import com.music.fm.ui.theme.LumioDivider
 import com.music.fm.ui.theme.LumioFont
 import com.music.fm.ui.theme.LumioFontLabel
@@ -48,7 +49,8 @@ import com.music.fm.ui.theme.LumioPrimary
 /**
  * Lumio TV 独立歌曲列表页（歌单详情 / 排行榜 / 收藏 共用）：
  *
- *  - 顶栏：返回 + 居中标题「【名称】｜副标题」+ 右侧操作图标；
+ *  - 顶栏：居中标题「【名称】｜副标题」+ 右侧操作图标；
+ *    TV 不显示界面返回按钮（遥控器自带返回键），进入页面时焦点落到第一首歌；
  *  - 歌曲双列显示，每页 10 首（5 行 × 2 列），行样式为统一 [LumioSongRow]；
  *  - 底部分页条：「‹ 页码 ›」，遥控器左右键聚焦翻页按钮；
  *  - 遥控器返回键回到原歌单 / 排行榜 / 收藏页面。
@@ -71,13 +73,28 @@ fun LumioPagedSongPage(
     rankColor: ((Int) -> Color?)? = null,
     rowExtraItems: ((Int) -> List<SongExtraMenuItem>)? = null,
 ) {
-    // 遥控器返回键：回到原页面
+    // 遥控器返回键：回到原页面（TV 无界面返回按钮）
     if (onBack != null) {
         androidx.activity.compose.BackHandler { onBack() }
     }
+    val adaptive = LocalAdaptive.current
+    // TV 遥控器自带物理返回键，顶栏不再显示返回按钮；其它端保留界面返回键
+    val showBackButton = !adaptive.isTv
 
     val start = page * pageSize
     val pageSongs = songs.drop(start).take(pageSize)
+
+    // 进入页面给遥控器一个焦点起点：有界面返回键时落在返回键；
+    // TV 隐藏返回键后落在第一首歌（歌曲异步加载，等首行出现再逐帧请求焦点）。
+    val backFocus = remember { FocusRequester() }
+    val firstSongFocus = remember { FocusRequester() }
+    LaunchedEffect(showBackButton, page, pageSongs.isNotEmpty()) {
+        if (showBackButton) {
+            runCatching { backFocus.requestFocus() }
+        } else if (pageSongs.isNotEmpty()) {
+            firstSongFocus.requestFocusWhenReady()
+        }
+    }
 
     Column(
         modifier = modifier
@@ -85,16 +102,13 @@ fun LumioPagedSongPage(
             .background(MaterialTheme.colorScheme.surface),
     ) {
         // ══ 顶栏 ══
-        // 进入页面时把焦点落到返回键，保证遥控器方向键立即可用
-        val backFocus = remember { FocusRequester() }
-        LaunchedEffect(Unit) { runCatching { backFocus.requestFocus() } }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(60.dp)
                 .padding(horizontal = 8.dp),
         ) {
-            if (onBack != null) {
+            if (onBack != null && showBackButton) {
                 LxIconButton(
                     onClick = onBack,
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -179,6 +193,7 @@ fun LumioPagedSongPage(
                             onClick = { onPlay(globalIndex) },
                             rowHeight = fitRowHeight,
                             extraItems = rowExtraItems?.invoke(globalIndex) ?: emptyList(),
+                            focusRequester = if (i == 0) firstSongFocus else null,
                         )
                     }
                 }
