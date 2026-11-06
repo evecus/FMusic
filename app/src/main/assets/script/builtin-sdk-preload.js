@@ -390,7 +390,7 @@
           promise = sdk[args.source].hotSearch.getList()
           break
         case 'findMusic':
-          promise = Promise.resolve(sdk.findMusic(args.musicInfo))
+          promise = Promise.resolve(sdk.findMusic(args.musicInfo || args))
           break
         case 'musicUrl':
           promise = sdk[args.source].getMusicUrl(args.musicInfo, args.type).promise

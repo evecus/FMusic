@@ -132,7 +132,12 @@ class UserApiController(
 
     /** 换源重试：传入 musicInfo（含 source 字段） */
     fun findMusic(musicInfoJson: String): String =
-        builtinRuntime.call("findMusic", musicInfoJson)
+        builtinRuntime.call(
+            "findMusic",
+            JSONObject().apply {
+                put("musicInfo", JSONObject(musicInfoJson))
+            }.toString()
+        )
 
     /** 搜索建议（tipSearch），返回 string[] */
     fun tipSearch(source: String, keyword: String): String =
