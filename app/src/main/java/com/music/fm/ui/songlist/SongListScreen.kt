@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material3.CircularProgressIndicator
@@ -361,9 +362,30 @@ private fun OpenListDialog(
                     else Modifier.fillMaxWidth(0.85f)
                 )
                 .background(MaterialTheme.colorScheme.surfaceContainerLowest, cardShape)
-                .clip(cardShape)
-                .padding(horizontal = 20.dp, vertical = 16.dp),
+                .clip(cardShape),
         ) {
+            // 顶部色条 + 关闭按钮（对齐 lx 打开歌单弹窗）
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(36.dp)
+                    .background(LumioPrimaryLight600),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "关闭",
+                    tint = LumioPrimaryDark100,
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .lxFocusable(shape = RoundedCornerShape(12.dp))
+                        .clickable(onClick = onClose)
+                        .padding(2.dp),
+                )
+            }
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
             OutlinedTextField(
                 value = text,
                 onValueChange = { if (it.length <= 500) text = it },
@@ -395,9 +417,10 @@ private fun OpenListDialog(
                 OpenDialogButton(
                     label = "确认",
                     enabled = text.isNotBlank(),
-                    onClick = { onOpen(text) },
+                    onClick = { onOpen(text.trim()) },
                     modifier = Modifier.weight(1f),
                 )
+            }
             }
         }
     }
