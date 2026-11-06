@@ -126,9 +126,6 @@ private val chromeTopTitles = mapOf(
     "setting" to "设置",
 )
 
-/** 抽屉导航项顺序（对齐 lx-music 侧栏：搜索 / 歌单 / 排行 / 收藏 / 下载 / 设置） */
-private val drawerTabOrder = listOf("search", "songlist", "leaderboard", "mylist", "download", "setting")
-
 /** 悬浮迷你播放条占位（避免列表最后一项被遮住） */
 private val miniOverlaySpace = 76.dp
 
@@ -439,6 +436,7 @@ private fun MainScaffold(
                             onSetDownloadLyric = settingViewModel::setDownloadLyric,
                             onSetWriteTags = settingViewModel::setWriteTags,
                             onSetWriteCover = settingViewModel::setWriteCover,
+                            onSetWriteRomaLyric = settingViewModel::setWriteRomaLyric,
                             onSetWriteEmbeddedLyric = settingViewModel::setWriteEmbeddedLyric,
                             onNotifyMessage = settingViewModel::notifyMessage,
                             onConsumeMessage = settingViewModel::consumeMessage,
@@ -640,6 +638,7 @@ private fun MainScaffold(
                             onSetDownloadLyric = settingViewModel::setDownloadLyric,
                             onSetWriteTags = settingViewModel::setWriteTags,
                             onSetWriteCover = settingViewModel::setWriteCover,
+                            onSetWriteRomaLyric = settingViewModel::setWriteRomaLyric,
                             onSetWriteEmbeddedLyric = settingViewModel::setWriteEmbeddedLyric,
                             onNotifyMessage = settingViewModel::notifyMessage,
                             onOpenFilePicker = if (adaptive.isTv) {
@@ -798,9 +797,8 @@ private fun NavDrawerContent(
             )
         }
 
-        // 导航项（lx-music 顺序）
-        val drawerTabs = drawerTabOrder.mapNotNull { route -> tabs.firstOrNull { it.route == route } }
-        drawerTabs.forEach { tab ->
+        // 导航项：与平板 / TV 侧栏共用 tabs，顺序保持一致
+        tabs.forEach { tab ->
             val selected = currentRoute == tab.route
             val bg = if (selected) MaterialTheme.colorScheme.secondaryContainer
             else androidx.compose.ui.graphics.Color.Transparent

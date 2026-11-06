@@ -214,6 +214,10 @@ class SettingViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settingsRepository.setWriteCover(enabled) }
     }
 
+    fun setWriteRomaLyric(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setWriteRomaLyric(enabled) }
+    }
+
     fun setWriteEmbeddedLyric(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setWriteEmbeddedLyric(enabled) }
     }

@@ -46,8 +46,10 @@ data class AppSettings(
     val writeEmbeddedLyric: Boolean = true,
     /** 下载默认音质（下载弹窗预选） */
     val downloadQuality: String = Qualitys.Q128,
-    /** 下载歌曲时同时保存 .lrc 歌词文件 */
-    val downloadLyric: Boolean = true,
+    /** 下载歌曲时同时保存 .lrc 歌词文件（对齐 lx download.writeLyric，默认关） */
+    val downloadLyric: Boolean = false,
+    /** 歌词中附带罗马音（对齐 lx download.writeRomaLyric，默认关） */
+    val writeRomaLyric: Boolean = false,
 )
 
 class SettingsRepository(private val context: Context) {
@@ -62,6 +64,7 @@ class SettingsRepository(private val context: Context) {
         val WRITE_TAGS = booleanPreferencesKey("write_tags")
         val WRITE_COVER = booleanPreferencesKey("write_cover")
         val WRITE_EMBEDDED_LYRIC = booleanPreferencesKey("write_embedded_lyric")
+        val WRITE_ROMA_LYRIC = booleanPreferencesKey("write_roma_lyric")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -75,6 +78,7 @@ class SettingsRepository(private val context: Context) {
             writeTags = prefs[Keys.WRITE_TAGS] ?: true,
             writeCover = prefs[Keys.WRITE_COVER] ?: true,
             writeEmbeddedLyric = prefs[Keys.WRITE_EMBEDDED_LYRIC] ?: true,
+            writeRomaLyric = prefs[Keys.WRITE_ROMA_LYRIC] ?: false,
         )
     }
 
@@ -108,6 +112,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setWriteCover(enabled: Boolean) {
         context.dataStore.edit { it[Keys.WRITE_COVER] = enabled }
+    }
+
+    suspend fun setWriteRomaLyric(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.WRITE_ROMA_LYRIC] = enabled }
     }
 
     suspend fun setWriteEmbeddedLyric(enabled: Boolean) {

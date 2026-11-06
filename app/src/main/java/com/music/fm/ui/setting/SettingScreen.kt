@@ -77,6 +77,7 @@ fun SettingScreen(
     onSetDownloadLyric: (Boolean) -> Unit,
     onSetWriteTags: (Boolean) -> Unit,
     onSetWriteCover: (Boolean) -> Unit,
+    onSetWriteRomaLyric: (Boolean) -> Unit,
     onSetWriteEmbeddedLyric: (Boolean) -> Unit,
     onNotifyMessage: (String) -> Unit,
     /** TV 端走自建文件选择页；null 时走系统 SAF（手机 / 平板） */
@@ -304,6 +305,12 @@ fun SettingScreen(
                     subtitle = "下载完成后保存同名 .lrc 歌词文件",
                     checked = state.settings.downloadLyric,
                     onChange = onSetDownloadLyric,
+                )
+                SwitchOption(
+                    title = "写入罗马音歌词",
+                    subtitle = "歌词中附带罗马音（需开启下载歌词文件或写入内嵌歌词）",
+                    checked = state.settings.writeRomaLyric,
+                    onChange = onSetWriteRomaLyric,
                 )
                 SwitchOption(
                     title = "写入内嵌歌词",

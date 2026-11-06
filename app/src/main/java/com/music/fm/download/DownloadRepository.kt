@@ -272,8 +272,17 @@ class DownloadRepository(
 
             // 2. 写入标签 / 封面 / 内嵌歌词（失败影响提示，不中断下载）
             val settings = settingsRepository.settings.first()
-            if (settings.writeTags || settings.writeCover || settings.writeEmbeddedLyric) {
-                runCatching { writeAudioMetadata(tmp, task, settings) }
+            // 歌词只取一次：内嵌歌词与 .lrc 文件共用（对齐 lx handleMetadata：mergeLyrics 后复用）
+            var lyricContent: String? = null
+            if (settings.writeEmbeddedLyric || settings.downloadLyric) {
+                lyricContent = runCatching { fetchMergedLyric(task, settings.writeRomaLyric) }
+                    .onFailure {
+                        android.util.Log.w("DownloadRepository", "获取歌词失败", it)
+                        setToast("歌词写入失败：${it.message}")
+                    }.getOrNull()
+            }
+            if (settings.writeTags || settings.writeCover || (settings.writeEmbeddedLyric && lyricContent != null)) {
+                runCatching { writeAudioMetadata(tmp, task, settings, lyricContent) }
                     .onFailure {
                         android.util.Log.w("DownloadRepository", "写入标签失败", it)
                         setToast("写入歌曲信息失败：${it.message}")
@@ -302,8 +311,8 @@ class DownloadRepository(
             }
 
             // 4. 歌词文件
-            if (settings.downloadLyric) {
-                runCatching { downloadLyric(task) }
+            if (settings.downloadLyric && lyricContent != null) {
+                runCatching { downloadLyric(task, lyricContent) }
                     .onFailure {
                         android.util.Log.w("DownloadRepository", "保存歌词文件失败", it)
                         setToast("保存歌词文件失败：${it.message}")
@@ -324,6 +333,7 @@ class DownloadRepository(
         file: File,
         task: DownloadTask,
         settings: com.music.fm.data.AppSettings,
+        lyricContent: String?,
     ) = withContext(Dispatchers.IO) {
         val info = MusicInfo.parse(
             kotlinx.serialization.json.Json.parseToJsonElement(task.musicInfoJson).jsonObject,
@@ -367,15 +377,8 @@ class DownloadRepository(
             }
         }
 
-        if (settings.writeEmbeddedLyric) {
-            val lyric = runCatching {
-                com.music.fm.data.model.LyricInfo.parse(
-                    jsController.lyric(info.source, info.toJson())
-                )?.lyric
-            }.getOrNull()
-            if (!lyric.isNullOrEmpty()) {
-                tag.setField(org.jaudiotagger.tag.FieldKey.LYRICS, lyric)
-            }
+        if (settings.writeEmbeddedLyric && !lyricContent.isNullOrEmpty()) {
+            tag.setField(org.jaudiotagger.tag.FieldKey.LYRICS, lyricContent)
         }
 
         audio.tag = tag
@@ -515,10 +518,18 @@ class DownloadRepository(
         runCatching { context.contentResolver.update(uri, values, null, null) }
     }
 
-    private suspend fun downloadLyric(task: DownloadTask) = withContext(Dispatchers.IO) {
-        val lyricJson = jsController.lyric(task.source, task.musicInfoJson)
-        val lyric = com.music.fm.data.model.LyricInfo.parse(lyricJson)?.lyric
-            ?: return@withContext
+    /** 取歌词并按 lx 规则合并翻译 / 罗马音；取不到歌词时抛错（对齐 lx「未获取到可写入的歌词」） */
+    private suspend fun fetchMergedLyric(task: DownloadTask, withRoma: Boolean): String =
+        withContext(Dispatchers.IO) {
+            val info = com.music.fm.data.model.LyricInfo.parse(
+                jsController.lyric(task.source, task.musicInfoJson)
+            ) ?: throw IllegalStateException("未获取到可写入的歌词")
+            val merged = LrcTool.mergeLyrics(info.lyric, info.tlyric, if (withRoma) info.rlyric else null)
+            if (merged.isEmpty()) throw IllegalStateException("未获取到可写入的歌词")
+            merged
+        }
+
+    private suspend fun downloadLyric(task: DownloadTask, lyric: String) = withContext(Dispatchers.IO) {
         val baseName = task.fileName.substringBeforeLast('.')
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
