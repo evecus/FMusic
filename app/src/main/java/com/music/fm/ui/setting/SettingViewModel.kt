@@ -214,6 +214,10 @@ class SettingViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settingsRepository.setWriteCover(enabled) }
     }
 
+    fun setFileNameFormat(format: String) {
+        viewModelScope.launch { settingsRepository.setFileNameFormat(format) }
+    }
+
     fun setWriteRomaLyric(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setWriteRomaLyric(enabled) }
     }

@@ -1,5 +1,6 @@
 package com.music.fm.ui.setting
 
+import com.music.fm.ui.component.LocalBottomOverlay
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -77,6 +78,7 @@ fun SettingScreen(
     onSetDownloadLyric: (Boolean) -> Unit,
     onSetWriteTags: (Boolean) -> Unit,
     onSetWriteCover: (Boolean) -> Unit,
+    onSetFileNameFormat: (String) -> Unit,
     onSetWriteRomaLyric: (Boolean) -> Unit,
     onSetWriteEmbeddedLyric: (Boolean) -> Unit,
     onNotifyMessage: (String) -> Unit,
@@ -114,7 +116,8 @@ fun SettingScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(adaptive.pagePadding),
+                    .padding(adaptive.pagePadding)
+                    .padding(bottom = LocalBottomOverlay.current),
             ) {
                 Text("自定义音源", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
@@ -324,6 +327,22 @@ fun SettingScreen(
                     checked = state.settings.writeCover,
                     onChange = onSetWriteCover,
                 )
+                Spacer(Modifier.height(8.dp))
+                Text("文件命名格式", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    com.music.fm.data.FileNameFormats.all.forEach { f ->
+                        FilterChip(
+                            selected = state.settings.fileNameFormat == f,
+                            onClick = { onSetFileNameFormat(f) },
+                            label = { Text(f) },
+                            modifier = Modifier.lxFocusable(shape = RoundedCornerShape(8.dp)),
+                        )
+                    }
+                }
 
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
 

@@ -1,5 +1,7 @@
 package com.music.fm.ui.search
 
+import com.music.fm.ui.component.overlayPadding
+import com.music.fm.ui.component.LocalBottomOverlay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -290,7 +292,8 @@ private fun SearchScreenMobile(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = adaptive.pagePadding),
+                        .padding(horizontal = adaptive.pagePadding)
+                        .padding(bottom = LocalBottomOverlay.current),
                 ) {
                     if (state.hotList.isNotEmpty()) {
                         Text(
@@ -422,7 +425,7 @@ private fun SearchResultList(
                 columns = GridCells.Fixed(2),
                 state = gridState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                contentPadding = overlayPadding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 gridItemsIndexed(state.results, key = { _, it -> it.uniqueKey }) { index, info ->
@@ -447,7 +450,7 @@ private fun SearchResultList(
             }
         }
 
-        else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+        else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = overlayPadding()) {
             itemsIndexed(state.results, key = { _, it -> it.uniqueKey }) { index, info ->
                 LumioSongRow(
                     info = info,
@@ -756,7 +759,7 @@ private fun SearchResultBodyTv(
                 contentAlignment = Alignment.Center,
             ) { Text(state.error, color = MaterialTheme.colorScheme.error) }
 
-            else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+            else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = overlayPadding()) {
                 itemsIndexed(state.results, key = { _, it -> it.uniqueKey }) { index, info ->
                     Box(modifier = if (index == 0) Modifier.focusRequester(firstResultFocus) else Modifier) {
                         LumioSongRow(

@@ -56,6 +56,10 @@ class DownloadRepository(
     private val _tasks = MutableStateFlow<List<DownloadTask>>(emptyList())
     val tasks: StateFlow<List<DownloadTask>> = _tasks.asStateFlow()
 
+    /** 当前文件命名格式（订阅设置缓存，addSongTask 为非挂起调用） */
+    @Volatile
+    private var fileNameFormat: String = com.music.fm.data.FileNameFormats.NAME_SINGER
+
     private val jobs = ConcurrentHashMap<String, Job>()
     private val isProcessing = AtomicBoolean(false)
 
@@ -73,6 +77,9 @@ class DownloadRepository(
     }
 
     init {
+        scope.launch {
+            settingsRepository.settings.collect { fileNameFormat = it.fileNameFormat }
+        }
         scope.launch {
             val saved = context.downloadsDataStore.data.first()[TASKS_KEY]
             val list = saved?.let { DownloadTask.listFromJson(it) } ?: emptyList()
@@ -106,7 +113,9 @@ class DownloadRepository(
     /** 添加歌曲下载任务（同 id 去重，与 mobile 一致 id = md5(id-quality)） */
     fun addSongTask(info: MusicInfo, quality: String) {
         val ext = if (quality.startsWith("flac")) "flac" else "mp3"
-        val fileName = filterFileName("${info.name} - ${info.singer}") + ".$ext"
+        val fileName = filterFileName(
+            com.music.fm.data.FileNameFormats.format(fileNameFormat, info.name, info.singer),
+        ) + ".$ext"
         val id = md5("${info.uniqueKey}-$quality")
         addTask(
             DownloadTask(

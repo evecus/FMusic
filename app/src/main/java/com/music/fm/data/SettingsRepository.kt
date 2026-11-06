@@ -50,7 +50,23 @@ data class AppSettings(
     val downloadLyric: Boolean = false,
     /** 歌词中附带罗马音（对齐 lx download.writeRomaLyric，默认关） */
     val writeRomaLyric: Boolean = false,
+    /** 下载文件命名格式（对齐 lx download.fileName：「歌名 - 歌手」/「歌手 - 歌名」/「歌名」） */
+    val fileNameFormat: String = FileNameFormats.NAME_SINGER,
 )
+
+object FileNameFormats {
+    const val NAME_SINGER = "歌名 - 歌手"
+    const val SINGER_NAME = "歌手 - 歌名"
+    const val NAME = "歌名"
+    val all = listOf(NAME_SINGER, SINGER_NAME, NAME)
+
+    /** 按格式生成文件名（不含扩展名与非法字符过滤）；一次性替换，避免歌名中含「歌手」二字被二次替换 */
+    fun format(format: String, name: String, singer: String): String = when (format) {
+        SINGER_NAME -> "$singer - $name"
+        NAME -> name
+        else -> "$name - $singer"
+    }
+}
 
 class SettingsRepository(private val context: Context) {
 
@@ -65,6 +81,7 @@ class SettingsRepository(private val context: Context) {
         val WRITE_COVER = booleanPreferencesKey("write_cover")
         val WRITE_EMBEDDED_LYRIC = booleanPreferencesKey("write_embedded_lyric")
         val WRITE_ROMA_LYRIC = booleanPreferencesKey("write_roma_lyric")
+        val FILE_NAME_FORMAT = stringPreferencesKey("download_file_name_format")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -79,6 +96,8 @@ class SettingsRepository(private val context: Context) {
             writeCover = prefs[Keys.WRITE_COVER] ?: true,
             writeEmbeddedLyric = prefs[Keys.WRITE_EMBEDDED_LYRIC] ?: true,
             writeRomaLyric = prefs[Keys.WRITE_ROMA_LYRIC] ?: false,
+            fileNameFormat = prefs[Keys.FILE_NAME_FORMAT]?.takeIf { it in FileNameFormats.all }
+                ?: FileNameFormats.NAME_SINGER,
         )
     }
 
@@ -112,6 +131,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setWriteCover(enabled: Boolean) {
         context.dataStore.edit { it[Keys.WRITE_COVER] = enabled }
+    }
+
+    suspend fun setFileNameFormat(format: String) {
+        context.dataStore.edit { it[Keys.FILE_NAME_FORMAT] = format }
     }
 
     suspend fun setWriteRomaLyric(enabled: Boolean) {

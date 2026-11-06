@@ -1,5 +1,6 @@
 package com.music.fm.ui.songlist
 
+import com.music.fm.ui.component.overlayPadding
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import com.music.fm.ui.component.requestFocusWhenReady
 import androidx.compose.foundation.background
@@ -576,7 +577,7 @@ private fun SongListGridBody(
                 columns = GridCells.Fixed(adaptive.gridColumns),
                 state = gridState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                contentPadding = overlayPadding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(itemSpacing),
                 verticalArrangement = Arrangement.spacedBy(itemSpacing + 4.dp),
             ) {
@@ -946,7 +947,7 @@ private fun SongListDetailBody(
                     columns = GridCells.Fixed(2),
                     state = gridState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    contentPadding = overlayPadding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     itemsIndexed(detail.songs, key = { _, it -> it.uniqueKey }) { index, info ->
@@ -989,7 +990,7 @@ private fun SongListDetailBody(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
                 // 手机：行拉满宽度，不留左右空白
-                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+                contentPadding = overlayPadding(horizontal = 0.dp, vertical = 4.dp),
             ) {
                 itemsIndexed(detail.songs, key = { _, it -> it.uniqueKey }) { index, info ->
                     LumioSongRow(

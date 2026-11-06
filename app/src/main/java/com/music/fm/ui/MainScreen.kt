@@ -169,6 +169,13 @@ fun MainScreen(modifier: Modifier = Modifier) {
         }
 
         FMusicTheme {
+            // 迷你条悬浮在页面之上：内容铺满到底，仅通过该余量让列表末尾可滚出迷你条
+            val bottomOverlay = if (!adaptive.isTv && currentRoute !in chromelessRoutes &&
+                playerState.current != null
+            ) miniOverlaySpace else 0.dp
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.music.fm.ui.component.LocalBottomOverlay provides bottomOverlay,
+            ) {
             MainScaffold(
                 navController = navController,
                 currentRoute = currentRoute,
@@ -183,6 +190,7 @@ fun MainScreen(modifier: Modifier = Modifier) {
                 playerState = playerState,
                 modifier = modifier,
             )
+            }
         }
     }
 }
@@ -320,9 +328,7 @@ private fun MainScaffold(
                         navController = navController,
                         startDestination = "mylist",
                         modifier = Modifier
-                            .fillMaxSize()
-                            // 悬浮迷你条占位，防止列表最后一项被遮住
-                            .then(if (showChrome && playerState.current != null) Modifier.padding(bottom = miniOverlaySpace) else Modifier),
+                            .fillMaxSize(),
                     ) {
                     composable("search") {
                         val state by searchViewModel.uiState.collectAsState()
@@ -436,6 +442,7 @@ private fun MainScaffold(
                             onSetDownloadLyric = settingViewModel::setDownloadLyric,
                             onSetWriteTags = settingViewModel::setWriteTags,
                             onSetWriteCover = settingViewModel::setWriteCover,
+                            onSetFileNameFormat = settingViewModel::setFileNameFormat,
                             onSetWriteRomaLyric = settingViewModel::setWriteRomaLyric,
                             onSetWriteEmbeddedLyric = settingViewModel::setWriteEmbeddedLyric,
                             onNotifyMessage = settingViewModel::notifyMessage,
@@ -453,6 +460,7 @@ private fun MainScaffold(
                     onClick = { navController.navigate("play") { launchSingleTop = true } },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
                         .padding(start = 28.dp, end = 28.dp, top = 8.dp, bottom = 10.dp),
                 )
             }
@@ -509,12 +517,7 @@ private fun MainScaffold(
                     navController = navController,
                     startDestination = "mylist",
                     modifier = Modifier
-                        .fillMaxSize()
-                        // 平板悬浮迷你条占位（TV 无迷你条）
-                        .then(
-                            if (showChrome && !adaptive.isTv && playerState.current != null)
-                                Modifier.padding(bottom = miniOverlaySpace) else Modifier
-                        ),
+                        .fillMaxSize(),
                 ) {
                     composable("search") {
                         val state by searchViewModel.uiState.collectAsState()
@@ -638,6 +641,7 @@ private fun MainScaffold(
                             onSetDownloadLyric = settingViewModel::setDownloadLyric,
                             onSetWriteTags = settingViewModel::setWriteTags,
                             onSetWriteCover = settingViewModel::setWriteCover,
+                            onSetFileNameFormat = settingViewModel::setFileNameFormat,
                             onSetWriteRomaLyric = settingViewModel::setWriteRomaLyric,
                             onSetWriteEmbeddedLyric = settingViewModel::setWriteEmbeddedLyric,
                             onNotifyMessage = settingViewModel::notifyMessage,

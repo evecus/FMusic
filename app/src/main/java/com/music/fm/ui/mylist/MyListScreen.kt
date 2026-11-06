@@ -1,5 +1,6 @@
 package com.music.fm.ui.mylist
 
+import com.music.fm.ui.component.overlayPadding
 import com.music.fm.ui.component.requestFocusWhenReady
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -391,7 +392,7 @@ private fun MyListContent(
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    contentPadding = overlayPadding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(24.dp),
                 ) {
                     itemsIndexed(state.songs, key = { _, it -> it.uniqueKey }) { index, info ->
@@ -411,7 +412,7 @@ private fun MyListContent(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     // 手机：行拉满宽度，不留左右空白
-                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+                contentPadding = overlayPadding(horizontal = 0.dp, vertical = 4.dp),
                 ) {
                     itemsIndexed(state.songs, key = { _, it -> it.uniqueKey }) { index, info ->
                         LumioSongRow(
@@ -470,7 +471,7 @@ private fun MyListGrid(
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+        contentPadding = overlayPadding(horizontal = 16.dp, vertical = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {

@@ -1,5 +1,6 @@
 package com.music.fm.ui.leaderboard
 
+import com.music.fm.ui.component.overlayPadding
 import com.music.fm.ui.component.requestFocusWhenReady
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -282,7 +283,7 @@ private fun BoardGrid(
             else -> LazyVerticalGrid(
                 columns = GridCells.Fixed(adaptive.gridColumns),
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+                contentPadding = overlayPadding(horizontal = 16.dp, vertical = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -373,7 +374,7 @@ private fun LeaderboardSongList(
                     columns = GridCells.Fixed(2),
                     state = gridState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    contentPadding = overlayPadding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     itemsIndexed(state.songs, key = { _, it -> it.uniqueKey }) { index, info ->
@@ -422,7 +423,7 @@ private fun LeaderboardSongList(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
                 // 手机：行拉满宽度，不留左右空白
-                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+                contentPadding = overlayPadding(horizontal = 0.dp, vertical = 4.dp),
             ) {
                 itemsIndexed(state.songs, key = { _, it -> it.uniqueKey }) { index, info ->
                     LumioSongRow(

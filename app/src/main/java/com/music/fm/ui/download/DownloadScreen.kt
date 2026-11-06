@@ -1,5 +1,6 @@
 package com.music.fm.ui.download
 
+import com.music.fm.ui.component.overlayPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -101,7 +102,7 @@ fun DownloadScreen(
                 )
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = overlayPadding()) {
                 items(filtered, key = { it.id }) { task ->
                     DownloadTaskRow(
                         task = task,
