@@ -225,7 +225,7 @@ class SongListViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * 「收藏歌单」：后台循环拉取歌单全部分页歌曲（对齐 mobile 版 getListDetailAll：
-     * 首页拿 total/limit 算页数，逐页拉完去重），然后整单创建到「收藏」页
+     * 首页拿 total/limit 算页数，逐页拉完去重），然后整单创建到「收藏」页收藏
      * （与内置列表同级，歌单名同原歌单，对齐 mobile 版 createList）。
      * 已收藏过同源歌单时全量覆盖同步（对齐 syncSourceList）。
      */

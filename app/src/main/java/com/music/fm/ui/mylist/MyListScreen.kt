@@ -60,6 +60,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -82,7 +83,7 @@ import com.music.fm.ui.theme.LumioFontLabel
 import com.music.fm.ui.theme.LumioPrimary
 
 /**
- * “收藏”页 — 对齐 Lumio 我的列表面板（TVMyListGridPanel），全平台统一：
+ * “收藏”页 — 对齐 Lumio 收藏面板（TVMyListGridPanel），全平台统一：
  *
  *  - 歌单选择：方块 Grid（手机 2 列 / 平板 3~4 列 / TV 5 列，
  *    宽高比 1.2、圆角 8、浅底 + 主色粗体居中），
@@ -502,9 +503,14 @@ private fun MyListCard(
 ) {
     val shape = RoundedCornerShape(8.dp)
     val cardFocus = incomingFocus ?: remember { FocusRequester() }
-    // TV 长按确认键：记录按下时刻，按住 ≥600ms 判定为长按 → 弹操作弹窗，
-    // 并消费本次 KeyUp 阻止触发点击进歌单
+    // TV 确认键：短按 = 进入歌单，长按（≥500ms）= 弹操作菜单。
+    // 用 onPreviewKeyEvent 接管全部确认键事件，不再交给 combinedClickable 的键盘处理
+    // （其按键重复会与自定义计时互相干扰）：
+    //  - 首次 KeyDown 记录时刻；按住期间的重复 KeyDown 到时即触发菜单（只触发一次）；
+    //  - KeyUp：未触发过长按则视为短按进入；若遥控器不发重复事件，按住 ≥500ms 的 KeyUp 也按长按处理；
+    //  - 没有对应 KeyDown 的 KeyUp（如关闭弹窗时确认键抬起）直接吞掉，避免误进入歌单。
     var centerDownAt by remember { mutableStateOf(0L) }
+    var longFired by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -512,32 +518,42 @@ private fun MyListCard(
             .padding(4.dp)
             .clip(shape)
             .background(LumioBoardCard)
+            .onPreviewKeyEvent { event ->
+                val isCenter = event.key == Key.DirectionCenter || event.key == Key.Enter
+                if (!isCenter) return@onPreviewKeyEvent false
+                val now = System.currentTimeMillis()
+                when (event.type) {
+                    KeyEventType.KeyDown -> {
+                        if (event.nativeKeyEvent.repeatCount == 0 || centerDownAt == 0L) {
+                            centerDownAt = now
+                            longFired = false
+                        } else if (!longFired && now - centerDownAt >= 500) {
+                            longFired = true
+                            onMenu()
+                        }
+                        true
+                    }
+                    KeyEventType.KeyUp -> {
+                        val downAt = centerDownAt
+                        val fired = longFired
+                        centerDownAt = 0L
+                        longFired = false
+                        when {
+                            downAt == 0L || fired -> Unit
+                            now - downAt >= 500 -> onMenu()
+                            else -> onClick()
+                        }
+                        true
+                    }
+                    else -> false
+                }
+            }
             .focusRequester(cardFocus)
             .lxFocusable(shape = shape)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onMenu,
             )
-            .onKeyEvent { event ->
-                val isCenter = event.key == Key.DirectionCenter || event.key == Key.Enter
-                when {
-                    isCenter && event.type == KeyEventType.KeyDown -> {
-                        centerDownAt = System.currentTimeMillis()
-                        false
-                    }
-                    isCenter && event.type == KeyEventType.KeyUp -> {
-                        val held = System.currentTimeMillis() - centerDownAt
-                        centerDownAt = 0L
-                        if (held >= 600) {
-                            onMenu()
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    else -> false
-                }
-            }
             .aspectRatio(1.2f),
         contentAlignment = Alignment.Center,
     ) {
