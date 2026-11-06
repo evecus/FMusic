@@ -68,6 +68,13 @@ object LxmcCodec {
         ).toString()
     }
 
+    /** lx 的 .lxmc 是 gzip 压缩的 JSON，导出同样压缩以便 lx 直接导入 */
+    fun encodeBytes(lists: List<ExportList>): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        java.util.zip.GZIPOutputStream(out).use { it.write(encode(lists).toByteArray(Charsets.UTF_8)) }
+        return out.toByteArray()
+    }
+
     /** 旧格式（FM 内部）→ lx 新格式，对应 toNewMusicInfo */
     fun songToNew(song: MusicInfo): JsonObject {
         val raw = song.raw
@@ -130,9 +137,26 @@ object LxmcCodec {
 
     // ── 导入 ─────────────────────────────────────────────────────
 
+    /** 解析备份文件字节：gzip（lx 的 .lxmc）或纯 JSON（.json）均可 */
+    fun decodeBytes(bytes: ByteArray): LxmcParseResult {
+        val isGzip = bytes.size > 2 && bytes[0] == 0x1f.toByte() && bytes[1] == 0x8b.toByte()
+        val text = if (isGzip) {
+            runCatching {
+                java.util.zip.GZIPInputStream(bytes.inputStream()).use { it.readBytes() }
+                    .toString(Charsets.UTF_8)
+            }.getOrElse { throw IllegalArgumentException("文件解压失败") }
+        } else bytes.toString(Charsets.UTF_8)
+        return decode(text.removePrefix("\uFEFF"))
+    }
+
     /** 解析 lx 列表备份文件；不支持的文件类型抛 [IllegalArgumentException] */
     fun decode(text: String): LxmcParseResult {
-        val root = runCatching { json.parseToJsonElement(text) as JsonObject }.getOrNull()
+        var el = runCatching { json.parseToJsonElement(text.trim()) }.getOrNull()
+        // 兼容 PC v1.14.0 导出数据被序列化两次的问题
+        if (el is JsonPrimitive && el.isString) {
+            el = runCatching { json.parseToJsonElement(el.content) }.getOrNull()
+        }
+        val root = el as? JsonObject
             ?: throw IllegalArgumentException("文件格式不正确")
         var skipped = 0
         fun songs(arr: JsonElement?, isNew: Boolean): List<MusicInfo> {

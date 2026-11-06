@@ -195,20 +195,20 @@ class SettingViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── 备份与恢复（列表导入 / 导出，lx .lxmc 互通） ──────────────
 
-    private suspend fun buildLxmcText(): String {
+    private suspend fun buildLxmcBytes(): ByteArray {
         val all = graph.myListRepository.snapshotAll()
-        // 与 lx 导出一致：不导出空的默认列表；FM 的「喜欢」始终导出
-        return LxmcCodec.encode(all)
+        // gzip 压缩的 playList_v2，与 lx 导出文件格式一致
+        return LxmcCodec.encodeBytes(all)
     }
 
     /** 导出到 SAF 选定的 uri（手机 / 平板） */
     fun exportListsToUri(uri: Uri) {
         viewModelScope.launch {
             runCatching {
-                val text = buildLxmcText()
+                val bytes = buildLxmcBytes()
                 withContext(Dispatchers.IO) {
                     getApplication<Application>().contentResolver.openOutputStream(uri, "wt")
-                        ?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                        ?.use { it.write(bytes) }
                         ?: throw IllegalArgumentException("无法写入文件")
                 }
             }.onSuccess {
@@ -223,8 +223,8 @@ class SettingViewModel(app: Application) : AndroidViewModel(app) {
     fun exportListsToDownloads() {
         viewModelScope.launch {
             runCatching {
-                val text = buildLxmcText()
-                withContext(Dispatchers.IO) { saveToDownloads(text) }
+                val bytes = buildLxmcBytes()
+                withContext(Dispatchers.IO) { saveToDownloads(bytes) }
             }.onSuccess { name ->
                 _uiState.value = _uiState.value.copy(message = "已导出到 下载/FMusic/$name")
             }.onFailure { e ->
@@ -233,12 +233,11 @@ class SettingViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun saveToDownloads(text: String): String {
+    private fun saveToDownloads(bytes: ByteArray): String {
         val ctx = getApplication<Application>()
         val stamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
             .format(java.util.Date())
         val name = "fm_list_$stamp.lxmc"
-        val bytes = text.toByteArray(Charsets.UTF_8)
         if (android.os.Build.VERSION.SDK_INT >= 29) {
             val values = android.content.ContentValues().apply {
                 put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
@@ -269,7 +268,7 @@ class SettingViewModel(app: Application) : AndroidViewModel(app) {
     /** 读取并解析备份文件（SAF uri），解析成功后等待用户确认 */
     fun prepareListImport(uri: Uri) = prepareListImportInternal {
         getApplication<Application>().contentResolver.openInputStream(uri)
-            ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+            ?.use { it.readBytes() }
             ?: throw IllegalArgumentException("无法读取文件")
     }
 
@@ -277,15 +276,15 @@ class SettingViewModel(app: Application) : AndroidViewModel(app) {
     fun prepareListImportFromFile(path: String) = prepareListImportInternal {
         val f = java.io.File(path)
         if (!f.isFile || !f.canRead()) throw IllegalArgumentException("无法读取文件")
-        f.readText(Charsets.UTF_8)
+        f.readBytes()
     }
 
-    private fun prepareListImportInternal(reader: () -> String) {
+    private fun prepareListImportInternal(reader: () -> ByteArray) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(importing = true, message = null)
             runCatching {
-                val text = withContext(Dispatchers.IO) { reader() }
-                LxmcCodec.decode(text.removePrefix("\uFEFF"))
+                val bytes = withContext(Dispatchers.IO) { reader() }
+                LxmcCodec.decodeBytes(bytes)
             }.onSuccess { parsed ->
                 _uiState.value = if (parsed.lists.isEmpty()) {
                     _uiState.value.copy(message = "文件中没有可导入的列表")
